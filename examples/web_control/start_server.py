@@ -11,17 +11,17 @@ CODE_DIR = "/home/pi/picrawler/examples/web_control"
 
 
 def start_http_server():
-    system(f"cd {CODE_DIR}/web_client && sudo python3 -m http.server 80 2>&1 1>/dev/null &")#开启服务器
+    system(f"cd {CODE_DIR}/web_client && sudo python3 -m http.server 80 2>&1 1> httpserver.log &")#开启服务器
 
 def close_http_server():
-    system("sudo kill $(ps aux | grep 'http.server' | awk '{ print $2 }') 2>&1 1>/dev/null")
-    
+    system("sudo kill $(ps aux | grep 'http.server' | awk '{ print $2 }') 2>&1 1>httpserver.log")
+
 def start_websocket():
-    system(f"cd {CODE_DIR}/web_server && sudo python3 web_server.py 2>&1 1>/dev/null&")
+    system(f"cd {CODE_DIR}/web_server && sudo python3 web_server.py 2>&1 1> websocket.log &")
 
 def close_websocket():
     # print("close_websocket")
-    system("sudo kill $(ps aux | grep 'web_server.py' | awk '{ print $2 }') 2>&1 1>/dev/null")
+    system("sudo kill $(ps aux | grep 'web_server.py' | awk '{ print $2 }') 2>&1 1> websocket.log")
 
 
 
@@ -34,12 +34,12 @@ if __name__ == '__main__':
             time.sleep(1)
         start_websocket()
         start_http_server()
-        print("Web example starts at %s" % (ip)) 
+        print("Web example starts at %s" % (ip))
         print("Open http://%s in your web browser to control the car!" % (ip))
         # print("Press Ctrl + C to exit")
         while 1:
-            
-            pass 
+
+            pass
     except KeyboardInterrupt:
         print('KeyboardInterrupt')
     finally:

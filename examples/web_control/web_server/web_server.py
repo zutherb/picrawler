@@ -56,12 +56,10 @@ class Websocket():
             tmp = await websocket.recv()
             print(tmp)
             tmp = json.loads(tmp)
-
             for key in tmp:
                 self.recv_dict[key] = tmp[key]
             print("recv_dict: %s"%self.recv_dict)
             self.remote_control(str(self.recv_dict['RC']), int(self.recv_dict['SP']))
-            # print(recv_dict)
             Vilib.detect_color_name(str(self.recv_dict['CC']))
 
 
@@ -84,7 +82,9 @@ class Websocket():
             self.send_dict['CC'] = Vilib.detect_obj_parameter['color_default']
             # print(self.send_dict)
             self.send_dict['AS'] = sp.current_coord[self.recv_dict['OF'][1] - 1]
-            await websocket.send(json.dumps(self.send_dict))
+            dumps = json.dumps(self.send_dict)
+            print(dumps)
+            await websocket.send(dumps)
             await asyncio.sleep(0.01)
 
 
