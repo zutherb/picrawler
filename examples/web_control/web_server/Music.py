@@ -105,5 +105,5 @@ if __name__=='__main__':
     # time.sleep(5)
     # sound_effect_threading("ss.wav",volume=0.8)
     # return 1
-    
+
 
