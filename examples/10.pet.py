@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+y#!/usr/bin/python3
 import sys
 sys.path.append(r'/opt/ezblock')
 from ezblock import __reset_mcu__
@@ -86,4 +86,4 @@ def forever():
 
 if __name__ == "__main__":
     while True:
-        forever()  
+        forever()

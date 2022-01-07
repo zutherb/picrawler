@@ -15,7 +15,7 @@ speed = None
 
 Vilib.camera_start(True)
 Vilib.human_detect_switch(True)
-WiFi().write('CN', 'MakerStarsHall', 'sunfounder')
+
 speed = 100
 __SPIDER__.do_action('stand', 1, speed)
 
@@ -27,8 +27,8 @@ def forever():
   if (Vilib.human_detect_object('number')) >= 1:
     __SPIDER__.do_action('wave', 1, speed)
     __tts__.say('Hello,nice to meet you!')
-  
+
 if __name__ == "__main__":
     while True:
-        forever()  
+        forever()
 

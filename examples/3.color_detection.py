@@ -7,7 +7,6 @@ from ezblock import WiFi
 Vilib.camera_start(True)
 Vilib.color_detect_switch(True)
 Vilib.detect_color_name('red')
-WiFi().write('CN', 'MakerStarsHall', 'sunfounder')
 
 def forever():
   pass

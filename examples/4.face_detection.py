@@ -8,7 +8,6 @@ from ezblock import delay
 
 Vilib.camera_start(True)
 Vilib.human_detect_switch(True)
-WiFi().write('CN', 'MakerStarsHall', 'sunfounder')
 
 
 def forever():
@@ -17,4 +16,4 @@ def forever():
 
 if __name__ == "__main__":
     while True:
-        forever()  
+        forever()

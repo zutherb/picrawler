@@ -18,7 +18,7 @@ speed = None
 Vilib.camera_start(True)
 Vilib.color_detect_switch(True)
 Vilib.detect_color_name('red')
-WiFi().write('CN', 'MakerStarsHall', 'sunfounder')
+
 speed = 100
 
 
@@ -39,4 +39,4 @@ def forever():
 
 if __name__ == "__main__":
     while True:
-        forever()  
+        forever()
