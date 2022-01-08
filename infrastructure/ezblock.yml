@@ -6,11 +6,12 @@
     - name: Install a list of packages
       apt:
         pkg:
-          - alsa-utils
           - bc
+          - bluez-tools
           - git
-          - python3-pyaudio
-          - libgfortran3
+          - mpg123
+          - pulseaudio
+          - pulseaudio-module-bluetooth
           - vim
           - zsh
     - name: Install python packages
