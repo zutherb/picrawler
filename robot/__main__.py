@@ -45,7 +45,8 @@ def speach_recognition(out_q):
       if recognizer.AcceptWaveform(data):
         result = recognizer.Result()
         speak_recognition_result = json.loads(result)["text"]
-        textCommandQueue.put(speak_recognition_result)
+        if speak_recognition_result:
+          textCommandQueue.put(speak_recognition_result)
         led.off()
       else:
         partial_result = recognizer.PartialResult()
