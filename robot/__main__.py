@@ -49,7 +49,7 @@ def speach_recognition(out_q):
         led.off()
       else:
         partial_result = recognizer.PartialResult()
-        speak_recognition_result = json.loads(result)["partial"]
+        speak_recognition_result = json.loads(partial_result)["partial"]
         if speak_recognition_result.startswith('number one'):
           led.on()
 
