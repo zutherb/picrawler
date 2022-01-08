@@ -6,6 +6,7 @@ from threading import Thread
 import sounddevice as sd
 import vosk
 from ezblock import Pin
+from Music import *
 
 soundQueue = Queue()
 
@@ -53,6 +54,7 @@ def speach_recognition(out_q):
         speak_recognition_result = json.loads(partial_result)["partial"]
         if speak_recognition_result.startswith('number one'):
           led.on()
+          sound_effect_play('bell.wav', 100)
 
 
 def consumer(in_q):
