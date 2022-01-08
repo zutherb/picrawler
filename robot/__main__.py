@@ -5,6 +5,7 @@ from threading import Thread
 
 import sounddevice as sd
 import vosk
+from ezblock import Pin
 
 soundQueue = Queue()
 
@@ -36,14 +37,21 @@ def speach_recognition(out_q):
     recognizer = vosk.KaldiRecognizer(model,
                                       samplerate,
                                       '["number one stand up", "number one sit", "number one dance"]')
+
+    led = Pin("LED")
+
     while True:
       data = soundQueue.get()
       if recognizer.AcceptWaveform(data):
         result = recognizer.Result()
-        speek_recognition_result = json.loads(result)["text"]
-        textCommandQueue.put(speek_recognition_result)
+        speak_recognition_result = json.loads(result)["text"]
+        textCommandQueue.put(speak_recognition_result)
+        led.off()
       else:
-        print(recognizer.PartialResult())
+        partial_result = recognizer.PartialResult()
+        speak_recognition_result = json.loads(result)["partial"]
+        if speak_recognition_result.startswith('number one'):
+          led.on()
 
 
 def consumer(in_q):
@@ -51,6 +59,7 @@ def consumer(in_q):
     data = in_q.get()
     if data is not None:
       print("receive result", data)
+
 
 print('#' * 80)
 print('Press Ctrl+C to stop the recording')
@@ -61,4 +70,3 @@ t1 = Thread(target=consumer, args=(textCommandQueue,))
 speak_recognition_thread = Thread(target=speach_recognition, args=(textCommandQueue,))
 t1.start()
 speak_recognition_thread.start()
-

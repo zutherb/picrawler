@@ -3,14 +3,17 @@
   become: yes
 
   tasks:
+    - name: Apt update and upgrade
+      apt:
+        update_cache: yes
+        upgrade: dist
     - name: Install a list of packages
       apt:
         pkg:
           - bc
-          - bluez-tools
           - git
           - mpg123
-          - pulseaudio
+          - pi-bluetooth
           - pulseaudio-module-bluetooth
           - vim
           - zsh
@@ -26,12 +29,16 @@
         dest: /tmp/zsh-installer.sh
         mode: '0755'
     - name: Create a directory vosk model directory
-      ansible.builtin.file:
+      file:
         path: /opt/vosk/model/
         state: directory
         mode: '0755'
     - name: Install Vosk model
-      ansible.builtin.unarchive:
+      unarchive:
         src: https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
         dest: /opt/vosk/model/
         remote_src: yes
+    - name: Git checkout picrawler repo
+      git:
+        repo: 'https://github.com/zutherb/picrawler.git'
+        dest: /home/pi/picrawler
