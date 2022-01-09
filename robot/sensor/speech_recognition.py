@@ -1,5 +1,7 @@
-import json
 import sys
+sys.path.append(r'/opt/ezblock')
+
+import json
 from queue import Queue
 
 import sounddevice as sd
