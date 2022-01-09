@@ -1,4 +1,3 @@
-
 # PiCrawler Examples
 
 PiCrawler examples
@@ -113,3 +112,11 @@ website:
 
 E-mail:
     service@sunfounder.com
+
+python3 -m venv picrawler-env
+source picrawler-env/bin/activate 
+pip3 list shows all dependencies
+pip3 freeze > requirements.txts
+
+https://www.youtube.com/watch?v=x1cbYa2SSlE
+

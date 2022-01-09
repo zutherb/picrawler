@@ -1,2 +1,3 @@
-vosk
-sounddevice
+cffi==1.15.0
+pycparser==2.21
+sounddevice==0.4.4
