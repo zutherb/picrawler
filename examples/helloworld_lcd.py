@@ -1,23 +1,15 @@
 #!/usr/bin/python3
 import sys
 sys.path.append(r'/opt/ezblock')
-from ezblock import Pin
-from ezblock import delay
+from ezblock import LCD
 
-ledValue = 0
-
-userBotton=Pin("SW")
-led=Pin("LED")
+lcd = LCD(0X3C)
 
 def forever():
-  global ledValue, userBotton, led
-  if userBotton.value() == 0:
-    ledValue = (ledValue+1) % 2
-    print("Button pressed", ledValue)
-    led.value(ledValue)
-    delay(1000)
-
+  pass
 
 if __name__ == "__main__":
+    lcd.clear()
+    lcd.message("Hello World")
     while True:
         forever()

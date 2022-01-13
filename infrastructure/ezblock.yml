@@ -12,6 +12,7 @@
         pkg:
           - bc
           - git
+          - evdev
           - mpg123
           - pi-bluetooth
           - pulseaudio-module-bluetooth
@@ -20,8 +21,9 @@
     - name: Install python packages
       pip:
         name:
+          - numpy==1.21.5
+          - nltk
           - vosk
-          - deepspeech
           - sounddevice
     - name: Download zsh installer
       get_url:
@@ -38,6 +40,8 @@
         src: https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
         dest: /opt/vosk/model/
         remote_src: yes
+    - name: download nltk corpus
+      shell: python3 -m nltk.downloader all
     - name: Git checkout picrawler repo
       git:
         repo: 'https://github.com/zutherb/picrawler.git'

@@ -15,8 +15,8 @@
     - name: Install python packages
       pip:
         name:
-          - opencv-python
-          - opencv-python-headless
+          - numpy=1.21.5
+          - nltk
           - vosk
           - sounddevice
     - name: Download WiringPI
@@ -38,21 +38,21 @@
 #    - name: Remove the zsh-installer.sh
 #      file: path=/tmp/zsh-installer.sh state=absent
     - name: Git checkout ezblock
-      ansible.builtin.git:
+      git:
         repo: 'https://github.com/ezblockcode/ezb-pi.git'
         dest: /tmp/ezb-pi
         depth: 1
     - name: Install ezblock
-      ansible.builtin.shell: python install.py
+      shell: python install.py
       args:
         chdir: /tmp/ezb-pi/
     - name: Create a directory model directory
-      ansible.builtin.file:
+      file:
         path: /opt/vosk/model/
         state: directory
         mode: '0755'
     - name: Install Vosk model
-      ansible.builtin.unarchive:
+      unarchive:
         src: https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
         dest: /opt/vosk/model/
         extra_opts: [--strip-components=1]
