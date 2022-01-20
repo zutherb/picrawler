@@ -11,18 +11,20 @@
       apt:
         pkg:
           - bc
+          - bluealsa
           - git
-          - evdev
           - mpg123
           - pi-bluetooth
-          - pulseaudio-module-bluetooth
+          - mosquitto
           - vim
           - zsh
     - name: Install python packages
       pip:
         name:
+          - evdev
           - numpy==1.21.5
           - nltk
+          - paho-mqtt
           - vosk
           - sounddevice
     - name: Download zsh installer
@@ -42,6 +44,16 @@
         remote_src: yes
     - name: download nltk corpus
       shell: python3 -m nltk.downloader all
+    - name: Git checkout Vlib repo
+      git:
+        repo: 'https://github.com/sunfounder/vilib.git'
+        dest: /home/pi/vilib
+    - name: install vilib library
+      shell: python3 install.py
+      become: true
+      become_user: root
+      args:
+        chdir: /home/pi/vilib
     - name: Git checkout picrawler repo
       git:
         repo: 'https://github.com/zutherb/picrawler.git'

@@ -12,6 +12,9 @@ import logging
 from Music import *
 from ezblock import Pin
 
+import paho.mqtt.client as mqtt
+
+
 soundQueue = Queue()
 
 def callback(indata, frames, time, status):
@@ -23,10 +26,11 @@ def callback(indata, frames, time, status):
 class SpeechRecognizer(Thread):
 
 
-  def __init__(self, textCommandQueue):
+  def __init__(self):
     Thread.__init__(self)
     self.name ="SpeechRecognizer"
-    self.textCommandQueue = textCommandQueue
+    self.client = mqtt.Client(self.name)
+    self.client.connect("127.0.0.1")
 
   def run(self):
     device = 0
@@ -57,7 +61,7 @@ class SpeechRecognizer(Thread):
           result = recognizer.Result()
           speech_recognition_result = json.loads(result)["text"]
           if speech_recognition_result:
-            self.textCommandQueue.put(speech_recognition_result)
+            self.client.publish("picrawler/speechrecognition", speech_recognition_result)
           led.off()
           startProcessing = True
         else:

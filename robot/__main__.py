@@ -1,19 +1,42 @@
+import concurrent
 import logging
+import time
 from multiprocessing import Queue
 from threading import Thread
 
+from actor.lcd import LCD
+from robot.sensor.remote_controller import RemoteController
 from sensor.speech_recognition import SpeechRecognizer
 
-textCommandQueue = Queue()
+
+import paho.mqtt.client as mqtt
+
 
 def consumer(in_q):
-  while True:
-    data = in_q.get()
-    if data is not None:
-      logging.debug("receive result", data)
-      print("receive result", data)
+  client = mqtt.Client("SpeechConsumer")
+  client.connect("127.0.0.1")
 
-t1 = Thread(target=consumer, args=(textCommandQueue,))
-speak_recognition_thread = SpeechRecognizer(textCommandQueue)
+  def on_connect(client, userdata, flags, rc):  # The callback for when the client connects to the broker
+    print("Connected with result code {0}".format(str(rc)))  # Print result of connection attempt
+    client.subscribe("picrawler/speechrecognition")
+  def on_message(client, userdata, message):
+      time.sleep(1)
+      print("received message =",str(message.payload.decode("utf-8")))
+
+  client.on_connect = on_connect  # Define callback function for successful connection
+  client.on_message = on_message  # Define callback function for receipt of a message
+
+  while True:
+    client.loop_forever()  # Start networking daemon
+
+t1 = Thread(target=consumer, args=(1,))
 t1.start()
+
+speak_recognition_thread = SpeechRecognizer()
 speak_recognition_thread.start()
+
+lcd_thread = LCD()
+lcd_thread.start()
+
+controller = RemoteController()
+controller.start()
