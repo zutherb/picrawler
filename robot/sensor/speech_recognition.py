@@ -53,7 +53,6 @@ class SpeechRecognizer(Thread):
                                         samplerate,
                                         '["number one stand up", "number one sit", "number one dance"]')
 
-      led = Pin("LED")
       startProcessing = True
       while True:
         data = soundQueue.get()
@@ -62,12 +61,12 @@ class SpeechRecognizer(Thread):
           speech_recognition_result = json.loads(result)["text"]
           if speech_recognition_result:
             self.client.publish("picrawler/speechrecognition", speech_recognition_result)
-          led.off()
+            self.client.publish("picrawler/led", False)
           startProcessing = True
         else:
           partial_result = recognizer.PartialResult()
           speech_recognition_result = json.loads(partial_result)["partial"]
           if speech_recognition_result.startswith('number one') and startProcessing:
             startProcessing = False
-            led.on()
+            self.client.publish("picrawler/led", True)
             sound_effect_play('bell.wav', 100)
