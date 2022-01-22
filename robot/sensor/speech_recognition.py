@@ -5,6 +5,7 @@ sys.path.append(r'/opt/ezblock')
 
 import json
 from multiprocessing import Queue
+import configparser
 
 import sounddevice as sd
 import vosk
@@ -26,15 +27,17 @@ def callback(indata, frames, time, status):
 class SpeechRecognizer(Thread):
 
 
-  def __init__(self):
+  def __init__(self, config):
     Thread.__init__(self)
     self.name ="SpeechRecognizer"
+    self.config = config
+
     self.client = mqtt.Client(self.name)
-    self.client.connect("127.0.0.1")
+    self.client.connect(config['MQTT']['Host'])
 
   def run(self):
     device = 0
-    modelPath = '/opt/vosk/model/vosk-model-small-en-us-0.15/'
+    modelPath = self.config['SPEECHRECOGNITION']['VoskModelPath']
 
     device_info = sd.query_devices(device, 'input')
     samplerate = int(device_info['default_samplerate'])
@@ -51,7 +54,7 @@ class SpeechRecognizer(Thread):
 
       recognizer = vosk.KaldiRecognizer(model,
                                         samplerate,
-                                        '["number one stand up", "number one sit", "number one dance"]')
+                                        '["number one stand up", "number one sit down", "number one dance"]')
 
       startProcessing = True
       while True:
@@ -60,13 +63,13 @@ class SpeechRecognizer(Thread):
           result = recognizer.Result()
           speech_recognition_result = json.loads(result)["text"]
           if speech_recognition_result:
-            self.client.publish("picrawler/speechrecognition", speech_recognition_result)
-            self.client.publish("picrawler/led", False)
+            self.client.publish(self.config['TOPICS']['speechrecognition'], speech_recognition_result)
+            self.client.publish(self.config['TOPICS']['led'], False)
           startProcessing = True
         else:
           partial_result = recognizer.PartialResult()
           speech_recognition_result = json.loads(partial_result)["partial"]
-          if speech_recognition_result.startswith('number one') and startProcessing:
+          if speech_recognition_result.startswith(self.config['SPEECHRECOGNITION']['Stopword']) and startProcessing:
             startProcessing = False
-            self.client.publish("picrawler/led", True)
+            self.client.publish(self.config['TOPICS']['led'], True)
             sound_effect_play('bell.wav', 100)

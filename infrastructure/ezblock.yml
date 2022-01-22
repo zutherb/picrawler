@@ -56,5 +56,9 @@
         chdir: /home/pi/vilib
     - name: Git checkout picrawler repo
       git:
+        repo: 'https://github.com/rm-hull/luma.examples.git'
+        dest: /home/pi/luma.examples
+    - name: Git checkout picrawler repo
+      git:
         repo: 'https://github.com/zutherb/picrawler.git'
         dest: /home/pi/picrawler
