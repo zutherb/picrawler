@@ -5,13 +5,11 @@ sys.path.append(r'/opt/ezblock')
 
 import json
 from multiprocessing import Queue
-import configparser
 
 import sounddevice as sd
 import vosk
 import logging
 from Music import *
-from ezblock import Pin
 
 import paho.mqtt.client as mqtt
 

@@ -10,18 +10,23 @@ from threading import Thread
 
 
 class UserButton(Thread):
-  def __init__(self):
+
+
+  def __init__(self, config):
     Thread.__init__(self)
     self.name = "user-button"
-    self.userButton = Pin("SW")
+    self.config = config
+
+    self.userButton = Pin(config['PINS']['UserButton'])
+
     self.client = mqtt.Client(self.name)
-    self.client.connect("127.0.0.1")
+    self.client.connect(config['MQTT']['Host'])
 
   def run(self):
-    lastState=None
+    lastState = None
     while True:
       b = not bool(self.userButton.value())
       if b is not lastState:
-        self.client.publish("picrawler/button", b)
+        self.client.publish(self.config['TOPICS']['button'], b)
         lastState = b
       time.sleep(0.1)

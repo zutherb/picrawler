@@ -5,8 +5,9 @@ import configparser
 from actor.lcd import LCD
 from actor.led import Led
 
-from sensor.user_button import UserButton
 from sensor.remote_controller import RemoteController
+from sensor.ultrasonic import UltraSonic
+from sensor.user_button import UserButton
 from sensor.speech_recognition import SpeechRecognizer
 
 import paho.mqtt.client as mqtt
@@ -31,19 +32,32 @@ def consumer(in_q):
   while True:
     client.loop_forever()  # Start networking daemon
 
-t1 = Thread(target=consumer, args=(1,))
-t1.start()
+try:
+  t1 = Thread(target=consumer, args=(1,))
+  t1.start()
 
-#Sensors
-speak_recognition_thread = SpeechRecognizer(config)
-speak_recognition_thread.start()
-controller = RemoteController()
-controller.start()
-user_button_thread = UserButton()
-user_button_thread.start()
+  #Sensors
+  speak_recognition_thread = SpeechRecognizer(config)
+  speak_recognition_thread.start()
+  #controller = RemoteController()
+  #controller.start()
+  user_button_thread = UserButton(config)
+  user_button_thread.start()
+  ultrasonic_thread = UltraSonic(config)
+  ultrasonic_thread.start()
 
-#Actors
-led_thread = Led(config)
-led_thread.start()
-lcd_thread = LCD()
-lcd_thread.start()
+  #Actors
+  led_thread = Led(config)
+  led_thread.start()
+  lcd_thread = LCD()
+  lcd_thread.start()
+except KeyboardInterrupt:
+  t1.__stop()
+  speak_recognition_thread.__stop()
+  #controller.__stop()
+  user_button_thread.__stop()
+  ultrasonic_thread.__stop()
+  led_thread.__stop()
+  lcd_thread.__stop()
+
+
