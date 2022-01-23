@@ -26,7 +26,7 @@ class Led(Thread):
     self.client.on_message = on_message  # Define callback function for receipt of a message
 
   def run(self):
-    self.client.loop_forever()  # Start networking daemon
+    self.client.loop_forever()
     while True:
       pass
 

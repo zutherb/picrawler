@@ -2,9 +2,11 @@ import time
 from threading import Thread
 import configparser
 
+#from actor.corpus import Corpus
 from actor.lcd import LCD
 from actor.led import Led
 
+from sensor.camera import Camera
 from sensor.remote_controller import RemoteController
 from sensor.ultrasonic import UltraSonic
 from sensor.user_button import UserButton
@@ -16,7 +18,7 @@ import paho.mqtt.client as mqtt
 # https://techtutorialsx.com/2017/04/23/python-subscribing-to-mqtt-topic/
 
 config = configparser.ConfigParser()
-config.read('robot.ini')
+config.read('numberone.ini')
 
 def consumer(in_q):
   client = mqtt.Client("SpeechConsumer")
@@ -37,23 +39,29 @@ try:
   t1.start()
 
   #Sensors
-  speak_recognition_thread = SpeechRecognizer(config)
-  speak_recognition_thread.start()
+  camera_thread = Camera(config)
+  camera_thread.start()
   #controller = RemoteController()
   #controller.start()
+  speak_recognition_thread = SpeechRecognizer(config)
+  speak_recognition_thread.start()
   user_button_thread = UserButton(config)
   user_button_thread.start()
   ultrasonic_thread = UltraSonic(config)
   ultrasonic_thread.start()
 
   #Actors
-  led_thread = Led(config)
-  led_thread.start()
+  #corpus_thread = Corpus(config)
+  #corpus_thread.start()
   lcd_thread = LCD()
   lcd_thread.start()
+  led_thread = Led(config)
+  led_thread.start()
 except KeyboardInterrupt:
   t1.__stop()
+  #corpus_thread.__stop()
   speak_recognition_thread.__stop()
+  camera_thread.__stop()
   #controller.__stop()
   user_button_thread.__stop()
   ultrasonic_thread.__stop()

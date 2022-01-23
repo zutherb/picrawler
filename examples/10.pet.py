@@ -1,4 +1,4 @@
-y#!/usr/bin/python3
+#!/usr/bin/python3
 import sys
 sys.path.append(r'/opt/ezblock')
 from ezblock import __reset_mcu__

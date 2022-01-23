@@ -2,7 +2,6 @@
 import sys
 sys.path.append(r'/opt/ezblock')
 from vilib import Vilib
-from ezblock import WiFi
 from ezblock import print
 from ezblock import delay
 

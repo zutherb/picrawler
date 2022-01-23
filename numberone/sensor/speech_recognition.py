@@ -34,7 +34,7 @@ class SpeechRecognizer(Thread):
     self.client.connect(config['MQTT']['Host'])
 
   def run(self):
-    device = 0
+    device = elf.config['SPEECHRECOGNITION']['device']
     modelPath = self.config['SPEECHRECOGNITION']['VoskModelPath']
 
     device_info = sd.query_devices(device, 'input')

@@ -27,6 +27,8 @@ class LCD(Thread):
     Thread.__init__(self)
     self.name ="LCD"
 
+    self.device = get_device()
+
   def init_histogram(self):
     # HistogramSettings
     histogramResolution = 100
@@ -45,7 +47,7 @@ class LCD(Thread):
     return histogramData, histogramTime
 
 
-  def render(self, device, histogramData, histogramTime):
+  def render(self, histogramData, histogramTime):
     # Vars:
     # Getting system uptime
     sysUptime = datetime.now() - datetime.fromtimestamp(psutil.boot_time())
@@ -84,11 +86,11 @@ class LCD(Thread):
     histogramHeight = (((100 - cpuPercent) * (minHistHeight - maxHistHeight)) / 100) + maxHistHeight
 
     # Starting the canvas for the screen
-    with canvas(device, dither=True) as draw:
+    with canvas(self.device, dither=True) as draw:
       # Print
       # Drawing the outlines and legends:
       # Main Outline
-      draw.rectangle(device.bounding_box, outline="white")
+      draw.rectangle(self.device.bounding_box, outline="white")
 
       # Histogram Outline
       draw.rectangle((minHistLenght, maxHistHeight, maxHistLenght, minHistHeight), outline="white")
@@ -148,8 +150,10 @@ class LCD(Thread):
           self.blnk = 1
 
   def run(self):
-    device = get_device()
     histogramData, histogramTime = self.init_histogram()
     while True:
-      self.render(device, histogramData, histogramTime)
+      self.render(histogramData, histogramTime)
       time.sleep(self.REFRESH_INTERVAL)
+
+  def __stop(self):
+    Thread.__stop()

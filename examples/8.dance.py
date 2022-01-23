@@ -2,8 +2,8 @@
 import sys
 sys.path.append(r'/opt/ezblock')
 from ezblock import __reset_mcu__
-import time
 __reset_mcu__()
+import time
 time.sleep(0.01)
 from Music import *
 from ezblock import delay
@@ -35,4 +35,4 @@ def forever():
 
 if __name__ == "__main__":
     while True:
-        forever()  
+        forever()

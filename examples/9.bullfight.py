@@ -6,7 +6,6 @@ import time
 __reset_mcu__()
 time.sleep(0.01)
 from vilib import Vilib
-from ezblock import WiFi
 from ezblock import delay
 from spider import Spider
 __SPIDER__ = Spider([10,11,12,4,5,6,1,2,3,7,8,9])
