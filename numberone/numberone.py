@@ -2,7 +2,7 @@ import time
 from threading import Thread
 import configparser
 
-#from actor.corpus import Corpus
+from actor.corpus import Corpus
 from actor.lcd import LCD
 from actor.led import Led
 
@@ -38,11 +38,19 @@ try:
   t1 = Thread(target=consumer, args=(1,))
   t1.start()
 
+  #Actors
+  corpus_thread = Corpus(config)
+  corpus_thread.start()
+  lcd_thread = LCD()
+  lcd_thread.start()
+  led_thread = Led(config)
+  led_thread.start()
+
   #Sensors
   camera_thread = Camera(config)
   camera_thread.start()
-  #controller = RemoteController()
-  #controller.start()
+  controller = RemoteController()
+  controller.start()
   speak_recognition_thread = SpeechRecognizer(config)
   speak_recognition_thread.start()
   user_button_thread = UserButton(config)
@@ -50,16 +58,9 @@ try:
   ultrasonic_thread = UltraSonic(config)
   ultrasonic_thread.start()
 
-  #Actors
-  #corpus_thread = Corpus(config)
-  #corpus_thread.start()
-  lcd_thread = LCD()
-  lcd_thread.start()
-  led_thread = Led(config)
-  led_thread.start()
 except KeyboardInterrupt:
   t1.__stop()
-  #corpus_thread.__stop()
+  corpus_thread.__stop()
   speak_recognition_thread.__stop()
   camera_thread.__stop()
   #controller.__stop()

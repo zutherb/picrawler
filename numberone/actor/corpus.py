@@ -11,7 +11,7 @@ from threading import Thread
 class Corpus(Thread):
   def __init__(self, config):
     Thread.__init__(self)
-    self.name = "Crawler"
+    self.name = "Corpus"
 
     __reset_mcu__()
     self.spider = Spider([10, 11, 12, 4, 5, 6, 1, 2, 3, 7, 8, 9])
@@ -20,7 +20,7 @@ class Corpus(Thread):
 
     self.client = mqtt.Client(self.name)
     self.client.connect(config['MQTT']['Host'])
-    self.client.subscribe(config['TOPICS']['crawler'])
+    self.client.subscribe(config['TOPICS']['corpus'])
 
     def on_message(client, userdata, message):
       payload = json.loads(str(message.payload.decode("utf-8")))
@@ -34,6 +34,10 @@ class Corpus(Thread):
       elif motion_name == 'backward':
         self.spider.do_action('backward', step, speed)
       elif motion_name == 'look_left':
+        self.spider.do_action('turn left', step, speed)
+      elif motion_name == 'turn left':
+        self.spider.do_action('turn right', step, speed)
+      elif motion_name == 'turn right':
         self.spider.do_action('look_left', step, speed)
       elif motion_name == 'look_right':
         self.spider.do_action('look_right', step, speed)
