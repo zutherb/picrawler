@@ -16,6 +16,7 @@ topic read {{ p }}/status
 topic read {{ p }}/event/#
 topic write {{ p }}/cmd/#
 topic write {{ p }}/vision/mode
+topic write {{ p }}/arbiter/status
 {% elif user.role == 'sensor' %}
 topic write {{ p }}/sensor/{{ user.sensor }}/#
 {% if user.sensor == 'vision' %}
@@ -28,6 +29,7 @@ topic read {{ p }}/event/#
 topic read {{ p }}/sensor/#
 topic write {{ p }}/cmd/action
 topic write {{ p }}/cmd/stop
+topic write {{ p }}/cmd/heartbeat
 topic write {{ p }}/vision/mode
 {% endif %}
 {% endfor %}

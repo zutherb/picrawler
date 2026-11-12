@@ -22,7 +22,8 @@ picrawler_pip_packages:
   - smbus2
   - paho-mqtt>=2,<3
 
-# Start/enable the units. Keep false until the service code exists.
+# Start/enable the units. Starting the body initializes the servos, so
+# enable this after a first manual test on the robot.
 picrawler_services_start: false
 
 picrawler_services:
@@ -46,7 +47,7 @@ picrawler_mqtt_host: "127.0.0.1"
 picrawler_mqtt_port: "{{ mosquitto_port | default(1883) }}"
 picrawler_mqtt_secret_dir: "{{ mosquitto_client_secret_dir | default('/etc/picrawler/mqtt') }}"
 
-# body.toml (see docs/target-architecture.md, section 8)
+# body.toml (see docs/target-architecture.md, section 9)
 picrawler_executor_queue_max: 8
 picrawler_executor_lockout_s: 1.0
 picrawler_watchdog_heartbeat_timeout_s: 1.0
@@ -63,3 +64,13 @@ picrawler_allowed_actions:
 
 # arbiter.toml
 picrawler_obstacle_stop_cm: 15
+picrawler_wander_enabled: false
+picrawler_wander_clear_cm: 25
+picrawler_wander_speed: 70
+
+# sensor-<name>.toml, extra keys of the [sensor] table per sensor
+picrawler_sensor_settings:
+  ultrasonic:
+    rate_hz: 10
+    trig_pin: D2
+    echo_pin: D3

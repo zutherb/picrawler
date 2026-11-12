@@ -2,7 +2,7 @@
 picrawler_robot_id: "1"
 picrawler_user: picrawler
 
-# Set to true once the service code (services/body, ...) exists (milestone M2).
+# Set to true after a first manual test on the robot (services/README.md).
 picrawler_services_start: false
 
 # Sensors that run on the Pi itself, one systemd instance each.

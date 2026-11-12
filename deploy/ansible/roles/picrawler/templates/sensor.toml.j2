@@ -4,3 +4,6 @@
 
 [sensor]
 name = "{{ sensor }}"
+{% for key, value in (picrawler_sensor_settings[sensor] | default({})).items() %}
+{{ key }} = {{ value | to_json }}
+{% endfor %}

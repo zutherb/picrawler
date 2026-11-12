@@ -3,7 +3,9 @@
 A stripped-down fork of [sunfounder/picrawler](https://github.com/sunfounder/picrawler)
 that only contains the robot's motion stack: leg kinematics, gait
 definitions and servo control. Voice/LLM, audio, camera and sensor code
-has been removed.
+has been removed from the library. On top of it, `services/` adds an
+MQTT-based service stack (body, arbiter, sensors), see
+[docs/target-architecture.md](docs/target-architecture.md).
 
 ## Layout
 
@@ -12,6 +14,9 @@ picrawler/
   kinematics.py   # pure math: coord2polar / polar2coord / limits (no hardware)
   gaits.py        # MoveList: all gaits as frames of 4 [x, y, z] leg tips (no hardware)
   picrawler.py    # Picrawler(robot_hat.Robot): drives the 12 servos
+  executor.py     # MotionExecutor: one worker thread, priorities, stop between frames
+services/         # MQTT microservices (body, arbiter, sensor_ultrasonic), see services/README.md
+deploy/ansible/   # provisions the Pi: Mosquitto, venv, systemd units
 tests/            # run off-hardware with a fake robot_hat
 examples/         # motion-only demos (need the real robot)
 ```
@@ -51,6 +56,18 @@ Leg order in every frame: right front, left front, left rear, right rear.
 Built-in gaits: `stand`, `sit`, `forward`, `backward`, `turn left`,
 `turn right`, `turn left angle`, `turn right angle`, `wave`, `push up`,
 `dance`, `look left`, `look right`, `look up`, `look down`.
+
+Interruptible execution from other threads:
+
+```python
+from picrawler.executor import Command, MotionExecutor, Priority
+
+ex = MotionExecutor(crawler)
+ex.start()
+ex.submit(Command("action", "forward", steps=5, speed=70))
+ex.stop()                 # aborts between two frames, locks out lower priorities for 1 s
+ex.shutdown(sit=True)
+```
 
 Off-hardware kinematics:
 

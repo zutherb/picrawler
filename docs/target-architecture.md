@@ -36,7 +36,7 @@ Motorik-Kern geändert werden muss.
 ```
  Sensor-Knoten                Arbiter                     Body-Service (Pi)
 ┌──────────────┐ sensor/*  ┌──────────────┐  cmd/*   ┌──────────────────────────┐
-│ ultrasonic   │ ────────► │ Regeln       │ ───────► │ picrawler_mqtt.adapter   │
+│ ultrasonic   │ ────────► │ Regeln       │ ───────► │ services.body (Adapter)  │
 │ imu          │           │ Prioritäten  │          │   Validierung, Dedupe    │
 │ vision+Coral │           │              │ ◄─────── │   Watchdog               │
 │ remote       │           └──────────────┘ state/*  │ picrawler.executor       │
@@ -49,8 +49,8 @@ Motorik-Kern geändert werden muss.
 |---|---|---|---|
 | `picrawler` (Kern) | dieses Repo | Kinematik, Gaits, Servos | MQTT importieren, Threads starten |
 | `picrawler.executor` | dieses Repo | Befehle nacheinander ausführen, unterbrechbar zwischen Frames | Netzwerkzugriff |
-| `picrawler_mqtt.adapter` | dieses Repo, eigenes Paket | MQTT ↔ Executor, Validierung, Watchdog, Status | Servos direkt ansteuern |
-| `picrawler_mqtt.arbiter` | anfangs im selben Prozess, später eigenständig | Sensorfakten → Befehle nach Priorität | `cmd/*` von Sensoren durchreichen |
+| `services.body` | dieses Repo, eigener Prozess | MQTT ↔ Executor, Validierung, Watchdog, Status | Servos am Executor vorbei ansteuern |
+| `services.arbiter` | dieses Repo, eigener Prozess | Sensorfakten → Befehle nach Priorität, Heartbeat | `cmd/*` von Sensoren durchreichen |
 | Sensor-Knoten | beliebig | Messwerte veröffentlichen | unter `cmd/*` veröffentlichen |
 | `vision-service` | Pi mit Kamera + Coral | Kamera, Videostream (nur lokal), Inferenz auf der TPU, Erkennungen veröffentlichen | Verhalten entscheiden, Befehle senden |
 | `web-service` | Pi | Login, Stream-Proxy, Objekt-Log, Not-Aus, Admin (Bluetooth, Vision-Modus, Dienste) | Servos oder Kamera direkt ansteuern |
@@ -64,14 +64,11 @@ picrawler/
   gaits.py
   picrawler.py        # + iter_action()
   executor.py         # neu
-picrawler_mqtt/       # neu, Extra: pip install .[mqtt]  (paho-mqtt)
-  __main__.py         # python -m picrawler_mqtt --config body.toml
-  adapter.py
-  arbiter.py
-  schema.py           # Payload-Validierung
-  config.py
-sensors/              # Beispiel-Knoten, keine Bibliothek
-  ultrasonic_node.py
+services/             # ein Prozess pro Dienst: python -m services.<name> --config …
+  common/             # config.py, mqtt.py (paho-Wrapper), schema.py (Payload-Validierung)
+  body/               # adapter.py (BodyAdapter), __main__.py
+  arbiter/            # arbiter.py (Regeln, Wander), __main__.py
+  sensor_ultrasonic/  # __main__.py
 services/vision/      # Kamera + Coral, siehe Abschnitt 7
   __main__.py
   camera.py           # picamera2: Haupt-Stream + lores-Stream
@@ -180,11 +177,17 @@ JSON in UTF-8 und enthalten `ts` (Unix-Zeit in Sekunden, float).
 | `cmd/action` | Arbiter → Body | 1 | **nie** |
 | `cmd/frame` | Arbiter → Body | 1 | **nie** |
 | `cmd/stop` | jeder Berechtigte → Body | 1 | **nie** |
-| `cmd/heartbeat` | Arbiter → Body | 0 | nein |
+| `cmd/heartbeat` | Arbiter (oder UI) → Body | 0 | nein |
 | `state/motion` | Body → | 1 | ja |
 | `state/legs` | Body → | 0 | ja |
 | `status` | Body → | 1 | ja (LWT `offline`) |
 | `event/rejected` | Body → | 1 | nein |
+| `event/watchdog` | Body → | 1 | nein |
+| `arbiter/status` | Arbiter → | 1 | ja (LWT `offline`) |
+
+GOAL-Befehle nimmt der Body nur an, wenn in der letzten Sekunde ein
+`cmd/heartbeat` kam. Sonst würde der Watchdog sie ohnehin sofort abbrechen.
+REFLEX-Befehle und `cmd/stop` brauchen keinen Heartbeat.
 
 Der Body-Service ignoriert retained Nachrichten auf `cmd/*` (`msg.retain == True`)
 und meldet sie über `event/rejected`.
@@ -238,7 +241,7 @@ Nachrichten, die eine der folgenden Regeln verletzen, werden verworfen und über
 | Verbindung zum Broker verloren | `stop(SAFETY)`, nach 5 s ohne Verbindung hinsetzen |
 | `cmd/heartbeat` bleibt länger als 1 s aus, während eine GOAL-Bewegung läuft | `stop(SAFETY)` |
 | Retained Befehl empfangen | ignorieren und melden |
-| Ungültige Nachricht | ignorieren und melden, Bewegung läuft weiter |
+| Ungültige Nachricht | ignorieren und melden, Bewegung läuft weiter. Ausnahme `cmd/stop`: wird immer ausgeführt, auch mit veraltetem `ts` oder kaputtem Inhalt |
 | Ausnahme im Executor | `error` melden, dann stoppen |
 | Prozessende (SIGINT/SIGTERM) | `shutdown(sit=True)`, `status` = `offline` |
 | Start | `status` = `online`, Zustand `idle`, **keine** automatische Bewegung |
@@ -553,9 +556,9 @@ actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wa
 
 | # | Inhalt | Abnahme |
 |---|---|---|
-| M1 | `iter_action`, `MotionExecutor` | Bestehende Tests grün, Executor-Tests grün, `do_action` verhält sich unverändert |
-| M2 | `picrawler_mqtt` Adapter + Schema + Watchdog | Adapter-Tests grün, Body-Service startet ohne Bewegung, Stopp per MQTT funktioniert am Gerät |
-| M3 | Arbiter + Ultraschall-Knoten | Robot läuft vorwärts und stoppt vor einem Hindernis (< 15 cm) |
+| M1 ✅ | `iter_action`, `MotionExecutor` | Bestehende Tests grün, Executor-Tests grün, `do_action` verhält sich unverändert |
+| M2 ✅ (Gerät offen) | `services.body`: Adapter + Schema + Watchdog | Adapter-Tests grün, Body-Service startet ohne Bewegung, Stopp per MQTT funktioniert am Gerät |
+| M3 ✅ (Gerät offen) | `services.arbiter` + `services.sensor_ultrasonic`, optional `[wander]` | Robot läuft vorwärts und stoppt vor einem Hindernis (< 15 cm) |
 | M4 | Weitere Sensoren / externe Steuerung | Neuer Sensor ohne Änderung an `picrawler/` angebunden |
 | M-V0 | Spike Coral-Software (unabhängig von M1–M3, kann sofort starten) | SSD MobileNet v2 läuft auf dem Ziel-Pi auf der TPU, gemessene Inferenzzeit und gewählter Installationsweg sind hier eingetragen |
 | M5 | vision-service: Stream + `detect` + Status | Stream im Browser mit Login, Erkennungen unter `sensor/vision/detections`, Stream läuft weiter, wenn die TPU abgezogen wird |

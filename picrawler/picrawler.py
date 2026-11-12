@@ -70,21 +70,38 @@ class Picrawler(Robot):
         name = motion_name.replace(" ", "_")
         return not name.startswith("_") and isinstance(getattr(type(self.move_list), name, None), property)
 
-    def do_action(self, motion_name, step=1, speed=50):
+    def iter_action(self, motion_name, step=1):
+        """Yield the frames of an action one by one.
+
+        Raises KeyError right away for unknown names. The stand_position
+        alternation advances as each repetition starts, exactly like
+        do_action, so a caller may stop between frames.
+        """
         if self._is_builtin_action(motion_name):
-            for _ in range(step): # times
-                self.move_list.stand_position = self.stand_position
-                if motion_name in ALTERNATING_GAITS:
-                    self.stand_position = self.stand_position + 1 & 1
-                action = self.move_list[motion_name]
-                for _step in action: # spyder motion
-                    self.do_step(_step, speed=speed)
-        elif self.move_list_add.get(motion_name) is not None:
-            for _ in range(step):
-                for _step in self.move_list_add[motion_name]:
-                    self.do_step(_step, speed=speed)
-        else:
+            return self._iter_builtin(motion_name, step)
+        if self.move_list_add.get(motion_name) is not None:
+            return self._iter_custom(motion_name, step)
+        raise KeyError(motion_name)
+
+    def _iter_builtin(self, motion_name, step):
+        for _ in range(step): # times
+            self.move_list.stand_position = self.stand_position
+            if motion_name in ALTERNATING_GAITS:
+                self.stand_position = self.stand_position + 1 & 1
+            yield from self.move_list[motion_name]
+
+    def _iter_custom(self, motion_name, step):
+        for _ in range(step):
+            yield from self.move_list_add[motion_name]
+
+    def do_action(self, motion_name, step=1, speed=50):
+        try:
+            frames = self.iter_action(motion_name, step)
+        except KeyError:
             print("No such action")
+            return
+        for _step in frames: # spyder motion
+            self.do_step(_step, speed=speed)
 
     def add_action(self, action_name, action_list):
         self.move_list_add[action_name] = action_list

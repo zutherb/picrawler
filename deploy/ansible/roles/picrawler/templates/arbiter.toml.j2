@@ -9,3 +9,9 @@ condition = "cm < {{ picrawler_obstacle_stop_cm }}"
 then = { kind = "stop", reason = "obstacle" }
 priority = "safety"
 cooldown_s = 1.0
+
+# Demo goal: walk forward, turn away from obstacles. Off by default.
+[wander]
+enabled = {{ picrawler_wander_enabled | bool | lower }}
+clear_cm = {{ picrawler_wander_clear_cm }}
+speed = {{ picrawler_wander_speed }}

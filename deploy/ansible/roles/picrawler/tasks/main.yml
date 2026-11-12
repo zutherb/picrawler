@@ -131,5 +131,5 @@
   ansible.builtin.debug:
     msg: >-
       Units are installed but not started (picrawler_services_start: false).
-      Enable it once services/body etc. exist.
+      Test once by hand (see services/README.md), then set it to true.
   when: not (picrawler_services_start | bool)
