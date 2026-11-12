@@ -91,6 +91,8 @@ services/             # one process per service: python -m services.<name> --con
   sensor_gamepad/     # gamepad.py (normalization), __main__.py (evdev), section 8.8
   vision/             # camera + Coral, see section 7
     camera.py         # picamera2: main stream + lores stream; test card for --fake
+    geometry.py       # pixel -> floor distance and bearing (camera height, tilt, FOV)
+    floor.py          # free floor ahead per image band (numpy)
     stream.py         # MJPEG over HTTP, 127.0.0.1 only
     inference.py      # Edge TPU detector (pycoral / tflite_runtime / ai_edge_litert)
     __main__.py       # imprint.py (learn custom objects) is planned
@@ -334,28 +336,49 @@ flight and only sends while the body is idle):
 
 ## 6a. Local map (look around)
 
-A robot-centric 2D map from the ultrasonic sensor, without new hardware.
-On `map/scan` (button "Scan" on the Remote page) the arbiter's Scan
-behaviour turns on the spot (`[scan] turns` = 16 headings) and, after each
-turn, waits `settle_s` for the body to stand still and takes the median of
-3 readings. No echo within 2 s while the sensor is alive counts as free.
-`services/arbiter/scan.py` turns the readings into an occupancy grid
-(5 cm cells, 1.5 m radius, 15° beam: free up to the echo, occupied at the
-echo, unknown elsewhere) and the arbiter publishes it, retained, on
-`map/local` after every reading:
+A robot-centric 2D map from the ultrasonic sensor and the camera, without
+new hardware. On `map/scan` (button "Scan" on the Remote page, web and
+iOS) the arbiter's Scan behaviour turns on the spot (`[scan] turns` = 16
+headings). After each turn it waits `settle_s` for the body to stand
+still, then collects:
+
+| Source | What | Strength | Blind spot |
+|---|---|---|---|
+| ultrasonic | median of 3 readings, a 15° cone | true distance, sees things above the floor (table edges) | thin objects, wide cone, slanted surfaces |
+| camera floor edge (`sensor/vision/floor`) | per image band (24 over ~54°): where the floor ends | sharp, wide, sees chair and table legs | things not touching the floor; patterned or wall-colored floors |
+| camera objects (`sensor/vision/detections`) | label, bearing, distance from the box's bottom edge | names things ("chair") | objects whose foot is cut off get the ultrasonic distance only near the center |
+
+It waits for a camera frame taken after settling only if the vision
+service sent floor data in the last 5 s, so the scan also works with
+the ultrasonic sensor alone. No echo within 2 s while the sensor is alive
+counts as free.
+
+`services/arbiter/scan.py` turns everything into an occupancy grid
+(5 cm cells, 1.5 m radius): free up to an echo or floor edge, occupied
+there, unknown elsewhere; occupied wins. Objects are merged per label and
+direction. The arbiter publishes the map, retained, on `map/local` after
+every stop:
 
 ```json
 {"status": "scanning|done|aborted|refused", "message": null, "progress": [5, 16],
- "samples": [{"heading_deg": 0, "cm": 82.0}, …], "grid": ["??..#", …],
- "cell_cm": 5, "radius_cm": 150, "nearest": [90, 31.0], "clearest_deg": 180, "user": "admin", "ts": …}
+ "samples": [{"heading_deg": 0, "cm": 82.0}, …], "floor": [{"heading_deg": 26.7, "cm": 61.0}, …],
+ "objects": [{"label": "chair", "heading_deg": 325.3, "cm": 62.0, "score": 0.81}],
+ "grid": ["??..#", …], "cell_cm": 5, "radius_cm": 150,
+ "nearest": [325.3, 61.0], "clearest_deg": 180, "user": "admin", "ts": …}
 ```
 
 Headings are degrees counter-clockwise from where the crawler faced at the
-start. Manual control, a rejected turn or a lost body/sensor aborts the
-scan. Limits:
+start. Manual control, a rejected turn or a lost body/ultrasonic sensor
+aborts the scan. Limits and calibration:
 
 - `turn_deg` (default 22.5) is an estimate: count the "turn left" steps
   for one full turn on your floor and set `turn_deg = 360 / steps`.
+- Camera mounting (`[geometry]` in vision.toml, Ansible
+  `picrawler_camera_*`): height and tilt are estimates. Put tape on the
+  floor 30 cm and 60 cm in front of the standing crawler and adjust
+  `tilt_deg` until `sensor/vision/floor` reports those distances straight
+  ahead (MQTT debug page). The nearest visible floor is about 20 cm away;
+  closer obstacles only the ultrasonic sensor sees.
 - The map is only valid where it was made. Legged steps slip, so there is
   no position to merge scans into a room map. That needs a pose source
   (AprilTags with the camera, or a 2D lidar plus IMU); see section 13.
@@ -406,7 +429,8 @@ device). The start mode is set in `vision.toml`; switching is done via
 
 | Topic | Direction | QoS | Retain | Payload |
 |---|---|---|---|---|
-| `sensor/vision/detections` | vision → | 0 | no | `{"frame_ts": …, "objects": [{"label": "person", "score": 0.87, "box": [x0, y0, x1, y1]}]}` (box normalized to 0–1) |
+| `sensor/vision/detections` | vision → | 0 | no | `{"frame_ts": …, "objects": [{"label": "person", "score": 0.87, "box": [x0, y0, x1, y1], "bearing_deg": 12.3, "floor_cm": 85.0}]}` (box normalized to 0–1; bearing positive to the left; floor_cm from the box's bottom edge, null if cut off) |
+| `sensor/vision/floor` | vision → | 0 | no | `{"frame_ts": …, "max_cm": 150, "near_cm": 20.7, "bands": [{"bearing_deg": 25.6, "cm": 61.0 or null}, …]}` (2 Hz, in every mode; null = floor free to max_cm; section 6a) |
 | `sensor/vision/pose` | vision → | 0 | no | `{"frame_ts": …, "score": 0.7, "keypoints": [[x, y, score], …]}` (17 points, COCO order) |
 | `sensor/vision/status` | vision → | 1 | yes (LWT `offline`) | `{"status": "online", "tpu": true, "mode": "detect", "fps": 18.2, "inference_ms": 9.5}` |
 | `vision/mode` | Arbiter/UI → vision | 1 | never | `{"id": "…", "mode": "pose", "ts": …}` |
@@ -861,7 +885,9 @@ actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wa
   any other Bluetooth pad works with the same code (section 8.8).
 - How long does a model switch (`detect` ↔ `pose`) take on the TPU?
 - How many degrees does one "turn left" step turn on a real floor
-  (`[scan] turn_deg`)?
+  (`[scan] turn_deg`)? Camera height and tilt for the floor edge?
+- Does the floor edge hold up on the real floors (color/texture), or is
+  a monocular depth model (MiDaS small, Depth Anything V2 small) needed?
 - Room map: AprilTags with the existing camera for the pose, or a 2D
   lidar (e.g. LD06) plus IMU (e.g. BNO085)? Either feeds a `mapper` service
   without changes to body or arbiter.

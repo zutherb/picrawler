@@ -208,6 +208,13 @@ picrawler_agent_wake_words: [crawler, krabbler, roboter]
 picrawler_vision_mode: detect
 picrawler_vision_size: [960, 540]
 picrawler_vision_fps: 15
+# Floor edge for the local map. Camera mounting values are estimates for the
+# original module on the head; calibrate with tape at 30/60 cm on the floor.
+picrawler_vision_floor: true
+picrawler_camera_hfov_deg: 53.5
+picrawler_camera_vfov_deg: 31.0
+picrawler_camera_height_cm: 9.0
+picrawler_camera_tilt_deg: 8.0
 picrawler_vision_model_dir: "{{ picrawler_state_dir }}/vision/models"
 # Coral test model (SSD MobileNet v2, COCO) from google-coral/test_data
 picrawler_vision_download_models: true

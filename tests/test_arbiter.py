@@ -336,5 +336,71 @@ class OccupancyTest(unittest.TestCase):
         self.assertEqual(grid[9][11:], "?" * 9)
 
 
+class ScanWithCameraTest(ArbiterTestBase):
+
+    def setUp(self):
+        self.make({"scan": {"turns": 2, "turn_deg": 90, "settle_s": 0.4, "readings": 3}})
+        self.arbiter.on_message("status", {"status": "online"})
+        self.arbiter.on_message("state/motion", {"status": "idle", "queue_len": 0})
+        self.distance(100)
+        self.floor([])                                # vision is alive
+
+    def floor(self, bands):
+        self.arbiter.on_message("sensor/vision/floor", {"bands": bands, "max_cm": 150, "ts": NOW})
+
+    def last_map(self):
+        return [m[1] for m in self.sent if m[0] == "map/local"][-1]
+
+    def test_waits_for_a_settled_frame_and_uses_it(self):
+        self.arbiter.on_message("map/scan", {"id": "s1"})
+        self.mono.t += 0.5
+        for _ in range(3):
+            self.distance(70)
+        self.arbiter.tick()
+        self.assertEqual(self.last_map()["progress"], [0, 2])       # no camera frame yet
+        self.floor([{"bearing_deg": 20, "cm": 60.0}, {"bearing_deg": -20, "cm": None}])
+        self.arbiter.on_message("sensor/vision/detections", {"objects": [
+            {"label": "chair", "score": 0.8, "bearing_deg": -15, "floor_cm": 55.0},
+            {"label": "cat", "score": 0.6, "bearing_deg": 3, "floor_cm": None},
+            {"label": "old", "score": 0.9}]})
+        self.arbiter.tick()
+        m = self.last_map()
+        self.assertEqual(m["floor"], [{"heading_deg": 20, "cm": 60.0}, {"heading_deg": 340, "cm": None}])
+        self.assertEqual([(o["label"], o["heading_deg"], o["cm"]) for o in m["objects"]],
+                         [("cat", 3, 70.0), ("chair", 345, 55.0)])  # cat: centered, ultrasonic distance
+        self.assertEqual(m["nearest"], (20, 60.0))                  # the camera saw it closer than the sonar
+
+    def test_goes_on_without_camera_after_the_timeout(self):
+        self.arbiter.on_message("map/scan", {"id": "s1"})
+        self.mono.t += 0.5
+        for _ in range(3):
+            self.distance(70)
+        self.arbiter.tick()
+        self.mono.t += 2.0
+        self.distance(70)
+        self.arbiter.tick()
+        self.assertEqual(self.last_map()["progress"], [1, 2])
+        self.assertEqual(self.last_map()["floor"], [])
+
+
+class OccupancyWithFloorTest(unittest.TestCase):
+
+    def test_floor_edge_marks_obstacle_the_ultrasonic_missed(self):
+        grid = localmap.occupancy([(0, None)], cell_cm=10, radius_cm=100, beam_deg=0.1, max_cm=200,
+                                  floor=[(0, 40.0)], floor_beam_deg=0.1)
+        column = "".join(row[10] for row in grid)
+        self.assertEqual(column[6], "#")              # 40 cm ahead
+        self.assertEqual(column[:6], "......")        # ultrasonic: no echo, free beyond
+
+    def test_objects_are_merged_per_label_and_direction(self):
+        merged = localmap.merge_objects([
+            {"label": "chair", "heading_deg": 350, "cm": 50, "score": 0.5},
+            {"label": "chair", "heading_deg": 5, "cm": 52, "score": 0.9},
+            {"label": "chair", "heading_deg": 180, "cm": 80, "score": 0.7},
+            {"label": "cat", "heading_deg": 0, "cm": None, "score": 0.6}])
+        self.assertEqual([(o["label"], o["heading_deg"]) for o in merged],
+                         [("cat", 0), ("chair", 5), ("chair", 180)])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -29,7 +29,7 @@ services/         # python -m services.<name> --config x.toml [--fake]; needs Py
   body/           # BodyAdapter: MQTT <-> executor, watchdog
   arbiter/        # Arbiter: rules, heartbeat, Manual > Scan (scan.py, local map) > AgentGoals > Wander
   sensor_ultrasonic/, sensor_gamepad/
-  vision/         # camera, MJPEG on 127.0.0.1:8081, Edge TPU detector
+  vision/         # camera, MJPEG on 127.0.0.1:8081, Edge TPU detector; geometry.py + floor.py (floor edge for the map)
   web/            # aiohttp UI: login, SSE, object log, admin; static/ has no inline JS (CSP)
   sensor_speech/  # mic + VAD + whisper-server client; agent/ (World, tools, brains); voice/ (Piper)
   display/        # OLED: sysinfo.py reads /proc+/sys, render.py draws a 128x64 1-bit image (testable, Pillow)

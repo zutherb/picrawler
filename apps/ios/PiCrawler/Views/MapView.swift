@@ -3,12 +3,15 @@ import SwiftUI
 /// The arbiter's look-around scan (map/local), as sent on the "map" event.
 struct LocalMap: Equatable {
     struct Sample: Equatable { let headingDeg: Double; let cm: Double? }
+    struct Object: Equatable { let label: String; let headingDeg: Double; let cm: Double? }
 
     let status: String               // scanning | done | aborted | refused
     let message: String?
     let done: Int
     let total: Int
     let samples: [Sample]
+    let objects: [Object]
+    let hasFloor: Bool               // the camera's floor edge went into the grid
     let grid: [String]               // "?" unknown, "." free, "#" obstacle; row 0 = far ahead
     let radiusCM: Double
     let nearest: (headingDeg: Double, cm: Double)?
@@ -26,6 +29,12 @@ struct LocalMap: Equatable {
             guard let heading = (s["heading_deg"] as? NSNumber)?.doubleValue else { return nil }
             return Sample(headingDeg: heading, cm: (s["cm"] as? NSNumber)?.doubleValue)
         }
+        objects = (json["objects"] as? [[String: Any]] ?? []).compactMap { o in
+            guard let label = o["label"] as? String, let heading = (o["heading_deg"] as? NSNumber)?.doubleValue
+            else { return nil }
+            return Object(label: label, headingDeg: heading, cm: (o["cm"] as? NSNumber)?.doubleValue)
+        }
+        hasFloor = !((json["floor"] as? [Any]) ?? []).isEmpty
         grid = json["grid"] as? [String] ?? []
         radiusCM = (json["radius_cm"] as? NSNumber)?.doubleValue ?? 150
         if let n = json["nearest"] as? [NSNumber], n.count == 2 {
@@ -84,6 +93,18 @@ struct MapCanvas: View {
                 ray.addLine(to: CGPoint(x: center.x - sin(a) * d, y: center.y - cos(a) * d))
                 context.stroke(ray, with: .color(sample.cm == nil ? .white.opacity(0.15) : Theme.accent2.opacity(0.55)))
             }
+            // objects the camera recognized; without a distance they sit at the edge
+            for object in map?.objects ?? [] {
+                let a = object.headingDeg * .pi / 180
+                let d = min(object.cm ?? radius * 0.92, radius * 0.92) * scale
+                let point = CGPoint(x: center.x - sin(a) * d, y: center.y - cos(a) * d)
+                let color: Color = object.cm == nil ? .white.opacity(0.55) : Theme.text
+                context.fill(Path(ellipseIn: CGRect(x: point.x - 5, y: point.y - 5, width: 10, height: 10)),
+                             with: .color(color))
+                let label = object.cm.map { "\(object.label) \(Int($0.rounded())) cm" } ?? object.label
+                context.draw(Text(label).font(.system(size: 12, weight: .medium)).foregroundColor(color),
+                             at: CGPoint(x: point.x + 9, y: point.y), anchor: .leading)
+            }
             var crawler = Path()
             crawler.move(to: CGPoint(x: center.x, y: center.y - 11))
             crawler.addLine(to: CGPoint(x: center.x - 8, y: center.y + 8))
@@ -120,9 +141,10 @@ struct MapPanel: View {
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.muted)
             HStack(spacing: 14) {
-                legend(Theme.accent.opacity(0.35), "free")
+                legend(Color(hex: 0x1F4A5E), "free")
                 legend(Theme.warn, "obstacle")
                 legend(Theme.deep2, "unknown")
+                legend(Theme.text, "object")
                 Spacer()
                 Button("Scan") { model.scan() }
                     .buttonStyle(OutlineButtonStyle())
@@ -141,13 +163,16 @@ struct MapPanel: View {
 
     private var infoText: String {
         guard let map = model.localMap else {
-            return "The crawler turns once on the spot and measures with the ultrasonic sensor after every step."
+            return "The crawler turns once on the spot. After every step the ultrasonic sensor measures and the camera finds where the floor ends and what it sees."
         }
         if let message = map.message { return message }
         if map.scanning { return "Turning and measuring…" }
         var parts = [map.time.formatted(date: .omitted, time: .standard)]
         if let n = map.nearest { parts.append("nearest \(Int(n.cm.rounded())) cm at \(Int(n.headingDeg.rounded()))°") }
         if let c = map.clearestDeg { parts.append("most room at \(Int(c.rounded()))°") }
+        let labels = map.objects.map(\.label).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+        if !labels.isEmpty { parts.append("seen: " + labels.joined(separator: ", ")) }
+        if !map.hasFloor { parts.append("ultrasonic only (no camera floor data)") }
         return parts.joined(separator: " · ") + ". Only valid where it was scanned."
     }
 

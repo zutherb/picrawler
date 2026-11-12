@@ -12,6 +12,20 @@ lores = [300, 300]
 fps = {{ picrawler_vision_fps }}
 quality = 70
 
+# Free floor ahead from the camera, for the arbiter's look-around map.
+[floor]
+enabled = {{ picrawler_vision_floor | to_json }}
+rate_hz = 2
+bins = 24
+max_cm = 150
+
+# Camera mounting, see services/vision/geometry.py for how to calibrate.
+[geometry]
+hfov_deg = {{ picrawler_camera_hfov_deg }}
+vfov_deg = {{ picrawler_camera_vfov_deg }}
+height_cm = {{ picrawler_camera_height_cm }}
+tilt_deg = {{ picrawler_camera_tilt_deg }}
+
 [stream]
 host = "127.0.0.1"
 port = 8081

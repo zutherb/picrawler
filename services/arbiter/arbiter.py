@@ -358,13 +358,19 @@ class Scan(Behavior):
     Requested on map/scan (web UI). Publishes the growing map, retained,
     on map/local after every reading (see scan.py). Waits settle_s after
     each turn so the body stands still, then takes the median of
-    `readings` ultrasonic values. Manual control, a rejected turn or a
-    lost body or sensor aborts it; agent goals and wander wait meanwhile.
+    `readings` ultrasonic values, plus the camera's floor edge and located
+    objects from frames taken after settling (if the vision service sends
+    them). Manual control, a rejected turn or a lost body or ultrasonic
+    sensor aborts it; agent goals and wander wait meanwhile.
     """
 
     request_topic = "map/scan"
     map_topic = "map/local"
     READING_TIMEOUT_S = 2.0
+    FLOOR_TOPIC = "sensor/vision/floor"
+    DETECTIONS_TOPIC = "sensor/vision/detections"
+    VISION_ALIVE_S = 5.0              # wait for a floor frame only if one came lately
+    CENTER_DEG = 8.0                  # object this close to straight ahead: ultrasonic gives its distance
 
     def __init__(self, arbiter, cfg):
         super().__init__(arbiter)
@@ -376,13 +382,19 @@ class Scan(Behavior):
         self.readings_needed = cfg.get("readings", 3)
         self.topic = cfg.get("topic", "sensor/ultrasonic/distance")
         self.sensor = sensor_of(self.topic)
-        self.grid_cfg = {k: cfg[k] for k in ("cell_cm", "radius_cm", "beam_deg", "max_cm") if k in cfg}
+        self.grid_cfg = {k: cfg[k] for k in ("cell_cm", "radius_cm", "beam_deg", "max_cm",
+                                             "floor_beam_deg", "floor_max_cm") if k in cfg}
         self.phase = None                 # None | "measure" | "turn"
         self.samples = []
         self.readings = []
         self.measure_from = 0.0
         self.sent = False
         self.requested_by = None
+        self.floor_points = []            # (heading_deg, cm or None) from the camera
+        self.objects = []
+        self.floor_frame = None           # newest floor/detections since settling
+        self.seen_objects = None
+        self.floor_seen_at = None
 
     def active(self):
         return self.phase is not None
@@ -402,21 +414,37 @@ class Scan(Behavior):
         if not a.sensor_fresh(self.sensor):
             self._publish("refused", "no ultrasonic readings")
             return
-        self.samples = []
+        self.samples, self.floor_points, self.objects = [], [], []
         self._measure()
         self._publish("scanning")
 
     def _measure(self):
         self.phase = "measure"
         self.readings = []
+        self.floor_frame = None
+        self.seen_objects = None
         self.measure_from = self.arbiter._mono() + self.settle_s
 
     def on_reading(self, suffix, payload):
-        if self.phase != "measure" or suffix != self.topic or self.arbiter._mono() < self.measure_from:
+        if not isinstance(payload, dict):
             return
-        cm = payload.get("cm") if isinstance(payload, dict) else None
-        if isinstance(cm, (int, float)) and not isinstance(cm, bool):
-            self.readings.append(float(cm))
+        now = self.arbiter._mono()
+        if suffix == self.FLOOR_TOPIC:
+            self.floor_seen_at = now
+        settled = self.phase == "measure" and now >= self.measure_from
+        if not settled:
+            return
+        if suffix == self.topic:
+            cm = payload.get("cm")
+            if isinstance(cm, (int, float)) and not isinstance(cm, bool):
+                self.readings.append(float(cm))
+        elif suffix == self.FLOOR_TOPIC and isinstance(payload.get("bands"), list):
+            self.floor_frame = payload["bands"]
+        elif suffix == self.DETECTIONS_TOPIC and isinstance(payload.get("objects"), list):
+            self.seen_objects = payload["objects"]
+
+    def _vision_alive(self):
+        return self.floor_seen_at is not None and self.arbiter._mono() - self.floor_seen_at <= self.VISION_ALIVE_S
 
     def on_rejected(self, payload):
         if self.pending and payload.get("id") == self.pending[0]:
@@ -452,16 +480,21 @@ class Scan(Behavior):
             self.measure_from = now + self.settle_s
             self.readings = []
             return
+        timed_out = now - self.measure_from > self.READING_TIMEOUT_S
+        if self.floor_frame is None and self._vision_alive() and not timed_out:
+            return                        # a settled camera frame is on its way
         if len(self.readings) >= self.readings_needed:
             cm = statistics.median(self.readings)
-        elif now - self.measure_from > self.READING_TIMEOUT_S:
+        elif timed_out:
             if not a.sensor_fresh(self.sensor):
                 self._abort("ultrasonic sensor stopped")
                 return
             cm = None                     # sensor alive but no echo: nothing in range
         else:
             return
-        self.samples.append((round(len(self.samples) * self.turn_deg, 1), None if cm is None else round(cm, 1)))
+        heading = round(len(self.samples) * self.turn_deg, 1)
+        self.samples.append((heading, None if cm is None else round(cm, 1)))
+        self._add_vision(heading, cm)
         if len(self.samples) >= self.turns:
             self.phase = None
             self._publish("done")
@@ -470,9 +503,30 @@ class Scan(Behavior):
         self.phase = "turn"
         self.sent = False
 
+    def _add_vision(self, heading, ultrasonic_cm):
+        """Camera facts from this stop, turned into the scan's headings."""
+        for band in self.floor_frame or []:
+            if not isinstance(band, dict):
+                continue
+            bearing, cm = band.get("bearing_deg"), band.get("cm")
+            if isinstance(bearing, (int, float)):
+                self.floor_points.append((round((heading + bearing) % 360, 1),
+                                          cm if isinstance(cm, (int, float)) else None))
+        for o in self.seen_objects or []:
+            bearing = o.get("bearing_deg") if isinstance(o, dict) else None
+            if not isinstance(bearing, (int, float)) or not isinstance(o.get("label"), str):
+                continue
+            cm = o.get("floor_cm")
+            if not isinstance(cm, (int, float)) and abs(bearing) <= self.CENTER_DEG:
+                cm = ultrasonic_cm
+            self.objects.append({"label": o["label"], "heading_deg": round((heading + bearing) % 360, 1),
+                                 "cm": round(cm, 1) if isinstance(cm, (int, float)) else None,
+                                 "score": o.get("score", 0)})
+
     def _publish(self, status, message=None):
         payload = localmap.map_payload(self.samples, status, self.turns, self.turn_deg, self.arbiter._wall(),
-                                       message=message, user=self.requested_by, **self.grid_cfg)
+                                       message=message, user=self.requested_by, floor=self.floor_points,
+                                       objects=self.objects, **self.grid_cfg)
         self.arbiter.publish(self.map_topic, payload, 1, True)
 
 

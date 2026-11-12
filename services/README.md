@@ -10,7 +10,7 @@ this (units from `deploy/ansible`). Background: `docs/target-architecture.md`.
 | `services.arbiter` | sensor readings and requests → commands: rules, heartbeat, gamepad/remote, look-around scan (local map), agent goals, optional "wander" | `arbiter` |
 | `services.sensor_ultrasonic` | measures and publishes the distance | `sensor-ultrasonic` |
 | `services.sensor_gamepad` | reads any Bluetooth/USB gamepad via evdev, publishes stick and buttons | `sensor-gamepad` |
-| `services.vision` | camera, MJPEG stream on 127.0.0.1:8081, object detection on the Coral | `sensor-vision` |
+| `services.vision` | camera, MJPEG stream on 127.0.0.1:8081, object detection on the Coral (with bearing and floor distance), free floor ahead for the local map | `sensor-vision` |
 | `services.web` | login, live video with boxes, object log, emergency stop, agent input, admin (Bluetooth, vision mode, services, metrics), MQTT debug page | `ui` |
 | `services.sensor_speech` | USB microphone, voice activity detection, whisper.cpp → text | `sensor-speech` |
 | `services.agent` | offline language model (Gemma 4 E2B via LiteRT-LM) with robot tools; asks the arbiter for movement; keyword parser as fallback | `agent` |

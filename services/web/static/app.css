@@ -381,8 +381,9 @@ pre.payload.compact { max-height: none; }
 .map-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .map-legend { display: flex; flex-wrap: wrap; gap: 14px; }
 .map-legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
-.swatch.free { background: rgba(48, 213, 192, 0.35); }
+.swatch.free { background: #1F4A5E; }
 .swatch.occupied { background: var(--warn); }
+.swatch.object { background: var(--text); border-radius: 50%; }
 .swatch.unknown { background: var(--bg-deep-2); border: 1px solid var(--border-strong); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .chip {

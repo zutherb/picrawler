@@ -85,18 +85,25 @@ class FakeFeed:
             asyncio.get_running_loop().call_later(
                 0.6, self.inject, "state/motion", {"status": "idle", "name": name, "priority": "goal", "queue_len": 0})
 
-    async def fake_scan(self, user, turns=16, turn_deg=22.5):
-        """Pretend the arbiter scanned a room with a box in it (mock only)."""
+    async def fake_scan(self, user, turns=16, turn_deg=22.5, hfov=53.5, bands=24):
+        """Pretend the arbiter scanned a room (mock only): walls, a chair, a thin
+        table leg the ultrasonic misses but the camera's floor edge finds."""
         from services.arbiter.scan import map_payload
-        walls = [((-90, -70), (-90, 140)), ((-90, 140), (120, 140)), ((120, 140), (120, -70)),
-                 ((120, -70), (-90, -70)), ((30, 50), (60, 50)), ((30, 50), (30, 80)),
-                 ((30, 80), (60, 80)), ((60, 50), (60, 80))]
 
-        def distance(heading):
+        def square(x, y, half):
+            return [((x - half, y - half), (x + half, y - half)), ((x + half, y - half), (x + half, y + half)),
+                    ((x + half, y + half), (x - half, y + half)), ((x - half, y + half), (x - half, y - half))]
+
+        walls = [((-90, -70), (-90, 140)), ((-90, 140), (120, 140)), ((120, 140), (120, -70)),
+                 ((120, -70), (-90, -70))] + square(45, 65, 15)
+        leg = square(-40, 60, 2.5)
+        chair = (45, 65)
+
+        def distance(heading, segments, limit):
             # ray from the robot; heading 0 = +y (ahead), positive = to the left (-x)
             dx, dy = -math.sin(math.radians(heading)), math.cos(math.radians(heading))
             best = None
-            for (x1, y1), (x2, y2) in walls:
+            for (x1, y1), (x2, y2) in segments:
                 ex, ey = x2 - x1, y2 - y1
                 den = dx * ey - dy * ex
                 if abs(den) < 1e-9:
@@ -105,17 +112,30 @@ class FakeFeed:
                 u = (x1 * dy - y1 * dx) / den
                 if t > 0 and 0 <= u <= 1:
                     best = t if best is None else min(best, t)
-            return None if best is None or best > 200 else round(best + random.uniform(-2, 2), 1)
+            return None if best is None or best > limit else round(best + random.uniform(-2, 2), 1)
 
-        samples = []
-        self.inject("map/local", map_payload(samples, "scanning", turns, turn_deg, time.time(), user=user), True)
+        chair_heading = math.degrees(math.atan2(-chair[0], chair[1])) % 360
+        chair_cm = math.hypot(*chair) - 15
+        samples, floor, objects = [], [], []
+
+        def show(status):
+            self.inject("map/local", map_payload(samples, status, turns, turn_deg, time.time(), user=user,
+                                                 floor=floor, objects=objects), True)
+
+        show("scanning")
         for i in range(turns):
             self.inject("state/motion", {"status": "running", "name": "turn left", "priority": "goal", "queue_len": 0})
             await asyncio.sleep(0.5)
             self.inject("state/motion", {"status": "idle", "name": "turn left", "priority": "goal", "queue_len": 0})
-            samples.append((i * turn_deg, distance(i * turn_deg)))
-            status = "done" if i == turns - 1 else "scanning"
-            self.inject("map/local", map_payload(samples, status, turns, turn_deg, time.time(), user=user), True)
+            heading = i * turn_deg
+            samples.append((heading, distance(heading, walls, 200)))
+            for b in range(bands):
+                bearing = hfov / 2 - hfov * (b + 0.5) / bands
+                floor.append((round((heading + bearing) % 360, 1), distance(heading + bearing, walls + leg, 150)))
+            if abs((chair_heading - heading + 180) % 360 - 180) < hfov / 2:
+                objects.append({"label": "chair", "heading_deg": round(chair_heading, 1),
+                                "cm": round(chair_cm + random.uniform(-3, 3), 1), "score": round(random.uniform(0.6, 0.9), 2)})
+            show("done" if i == turns - 1 else "scanning")
 
     def inject(self, suffix, payload, retain=False):
         self.monitor.record(suffix, encode(payload).encode(), retain, 0, time.time())

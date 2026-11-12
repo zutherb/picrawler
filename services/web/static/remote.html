@@ -66,14 +66,15 @@
         </div>
         <canvas id="map" class="local-map" width="480" height="480" aria-label="Map around the crawler"></canvas>
         <div class="map-foot">
-          <span class="muted small" id="map-info">The crawler turns once on the spot and measures with the
-            ultrasonic sensor after every step.</span>
+          <span class="muted small" id="map-info">The crawler turns once on the spot. After every step the
+            ultrasonic sensor measures and the camera finds where the floor ends and what it sees.</span>
           <button id="map-scan">Scan</button>
         </div>
         <div class="map-legend muted small">
           <span><i class="swatch free"></i>free</span>
           <span><i class="swatch occupied"></i>obstacle</span>
           <span><i class="swatch unknown"></i>unknown</span>
+          <span><i class="swatch object"></i>object</span>
           <span>rings every 50 cm</span>
         </div>
       </section>

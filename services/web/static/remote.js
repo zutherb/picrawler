@@ -207,6 +207,23 @@ function drawMap(m) {
     ctx.lineTo(center - Math.sin(a) * d, center - Math.cos(a) * d);
     ctx.stroke();
   }
+  // objects the camera recognized; without a distance they sit at the edge
+  ctx.font = "12px " + css.getPropertyValue("--font-head");
+  for (const o of (m && m.objects) || []) {
+    const a = o.heading_deg * Math.PI / 180;
+    const d = Math.min(o.cm == null ? radius * 0.92 : o.cm, radius * 0.92) * scale;
+    const x = center - Math.sin(a) * d, y = center - Math.cos(a) * d;
+    ctx.fillStyle = o.cm == null ? "rgba(244, 240, 255, 0.55)" : "#F4F0FF";
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(22, 10, 51, 0.9)";
+    ctx.lineWidth = 3;
+    const label = o.cm == null ? o.label : `${o.label} ${Math.round(o.cm)} cm`;
+    ctx.strokeText(label, x + 8, y + 4);
+    ctx.fillText(label, x + 8, y + 4);
+    ctx.lineWidth = 1;
+  }
   // the crawler, facing where it faced when the scan started
   ctx.fillStyle = css.getPropertyValue("--accent-1");
   ctx.beginPath();
@@ -234,6 +251,8 @@ function showMap(m) {
     const parts = [new Date(m.ts * 1000).toLocaleTimeString()];
     if (m.nearest) parts.push(`nearest ${Math.round(m.nearest[1])} cm at ${Math.round(m.nearest[0])}°`);
     if (m.clearest_deg != null) parts.push(`most room at ${Math.round(m.clearest_deg)}°`);
+    if (m.objects && m.objects.length) parts.push(`seen: ${[...new Set(m.objects.map((o) => o.label))].join(", ")}`);
+    if (!(m.floor && m.floor.length)) parts.push("ultrasonic only (no camera floor data)");
     info.textContent = parts.join(" · ") + ". Only valid where it was scanned.";
   } else if (scanning) {
     info.textContent = "Turning and measuring…";

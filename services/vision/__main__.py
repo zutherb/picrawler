@@ -3,8 +3,10 @@
     python -m services.vision --config /etc/picrawler/vision.toml [--fake]
 
 Streams MJPEG on 127.0.0.1 (the web service proxies it with login) and
-publishes detections as facts under sensor/vision/*. Modes: detect, off.
-pose and imprint are planned (docs/target-architecture.md, section 7).
+publishes facts under sensor/vision/*: detections (with bearing and floor
+distance per object) and, independent of the mode, the free floor ahead
+(sensor/vision/floor). Modes: detect, off. pose and imprint are planned
+(docs/target-architecture.md, section 7).
 """
 import signal
 import threading
@@ -13,7 +15,9 @@ import time
 from services.common import config
 from services.common.mqtt import make_bus
 
+from . import floor
 from .camera import FakeCamera, FrameBuffer, PiCamera
+from .geometry import CameraGeometry, locate
 from .inference import DetectorUnavailable, FakeDetector, TpuDetector
 from .stream import StreamServer
 
@@ -24,7 +28,7 @@ STATUS_EVERY_S = 2.0
 
 
 class Vision:
-    def __init__(self, bus, camera, buffer, detector_factory, cfg):
+    def __init__(self, bus, camera, buffer, detector_factory, cfg, floor_cfg=None, geometry_cfg=None):
         self.bus = bus
         self.camera = camera
         self.buffer = buffer
@@ -39,6 +43,14 @@ class Vision:
         self._fps_frames = 0
         self._fps_t = time.monotonic()
         self.fps = 0.0
+        floor_cfg = floor_cfg or {}
+        self.floor_enabled = floor_cfg.get("enabled", True)
+        self.floor_every_s = 1.0 / floor_cfg.get("rate_hz", 2.0)
+        self.floor_bins = floor_cfg.get("bins", 24)
+        self.floor_max_cm = floor_cfg.get("max_cm", 150.0)
+        self._floor_at = 0.0
+        self._geometry_cfg = geometry_cfg or {}
+        self._geometry = None             # built for the first frame's size
 
     # --- mode ---
 
@@ -86,9 +98,31 @@ class Vision:
 
     # --- inference loop ---
 
+    def geometry(self, rgb):
+        h, w = rgb.shape[:2]
+        if self._geometry is None or (self._geometry.width, self._geometry.height) != (w, h):
+            self._geometry = CameraGeometry.from_config(self._geometry_cfg, w, h)
+        return self._geometry
+
+    def publish_floor(self, rgb):
+        now = time.monotonic()
+        if not self.floor_enabled or rgb is None or now - self._floor_at < self.floor_every_s:
+            return
+        self._floor_at = now
+        geometry = self.geometry(rgb)
+        bands = floor.boundaries(rgb, geometry, bins=self.floor_bins, max_cm=self.floor_max_cm)
+        self.bus.publish("sensor/vision/floor", {
+            "frame_ts": time.time(), "max_cm": self.floor_max_cm,
+            "near_cm": round(geometry.nearest_floor_cm() or 0, 1),
+            "bands": [{"bearing_deg": b, "cm": cm} for b, cm in bands]})
+
     def run_inference(self, stopping):
         while not stopping.is_set():
             rgb = self.camera.capture_lores()
+            try:
+                self.publish_floor(rgb)
+            except Exception as e:      # a bad frame must not stop detection
+                self.error = "floor estimate failed: %s" % e
             with self._lock:
                 detector = self.detector if self.mode == "detect" else None
             if detector is None:
@@ -103,6 +137,8 @@ class Vision:
                 stopping.wait(1.0)
                 continue
             self.inference_ms = round(ms, 1)
+            if rgb is not None:
+                locate(objects, self.geometry(rgb), rgb.shape[1], rgb.shape[0])
             now = time.monotonic()
             if now - self._last_published >= 1.0 / self.max_rate_hz:
                 self._last_published = now
@@ -128,7 +164,7 @@ def main():
             return TpuDetector(det_cfg["model"], det_cfg["labels"], det_cfg.get("threshold", 0.4))
 
     bus = make_bus(cfg, "picrawler-vision", STATUS_TOPIC, fake=args.fake)
-    vision = Vision(bus, camera, buffer, factory, cfg.get("vision", {}))
+    vision = Vision(bus, camera, buffer, factory, cfg.get("vision", {}), cfg.get("floor", {}), cfg.get("geometry", {}))
     bus.subscribe("vision/mode")
     bus.on_message = vision.on_message
     bus.on_connect = vision.publish_status
