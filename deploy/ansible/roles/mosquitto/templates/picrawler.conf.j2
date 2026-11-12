@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+per_listener_settings false
+allow_anonymous false
+password_file /etc/mosquitto/picrawler.passwd
+acl_file /etc/mosquitto/picrawler.acl
+
+listener {{ mosquitto_port }} {{ mosquitto_listen_address }}

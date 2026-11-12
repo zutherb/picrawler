@@ -1,0 +1,8 @@
+# {{ ansible_managed }}
+[Unit]
+Description=PiCrawler robot stack
+Wants=mosquitto.service
+After=mosquitto.service
+
+[Install]
+WantedBy=multi-user.target

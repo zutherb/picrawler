@@ -1,0 +1,18 @@
+---
+- name: Sync local checkout to the Pi
+  ansible.posix.synchronize:
+    src: "{{ picrawler_local_source }}"
+    dest: "{{ picrawler_src_dir }}/"
+    delete: true
+    owner: false
+    group: false
+    rsync_opts:
+      - "--exclude=.git"
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=deploy"
+      - "--exclude=build"
+      - "--exclude=*.egg-info"
+      - "--chown=root:root"
+      - "--chmod=D755,F644"
+  register: picrawler_source

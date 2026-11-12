@@ -1,0 +1,15 @@
+---
+- name: "Check whether the package is installed: {{ pkg.name }}"
+  ansible.builtin.command: "{{ picrawler_venv }}/bin/pip show {{ pkg.name }}"
+  register: picrawler_pip_show
+  changed_when: false
+  failed_when: false
+
+- name: "Install local package: {{ pkg.name }}"
+  ansible.builtin.pip:
+    name: "{{ pkg.path }}"
+    virtualenv: "{{ picrawler_venv }}"
+    state: forcereinstall
+    extra_args: --no-deps
+  when: (pkg.changed | bool) or picrawler_pip_show.rc != 0
+  notify: Restart picrawler

@@ -1,0 +1,33 @@
+# {{ ansible_managed }}
+# Sensors publish facts, the arbiter decides, only the body owns state/status.
+{% set p = 'crawler/' ~ mosquitto_robot_id %}
+{% for user in mosquitto_users %}
+
+user {{ user.name }}
+{% if user.role == 'body' %}
+topic read {{ p }}/cmd/#
+topic write {{ p }}/state/#
+topic write {{ p }}/status
+topic write {{ p }}/event/#
+{% elif user.role == 'arbiter' %}
+topic read {{ p }}/sensor/#
+topic read {{ p }}/state/#
+topic read {{ p }}/status
+topic read {{ p }}/event/#
+topic write {{ p }}/cmd/#
+topic write {{ p }}/vision/mode
+{% elif user.role == 'sensor' %}
+topic write {{ p }}/sensor/{{ user.sensor }}/#
+{% if user.sensor == 'vision' %}
+topic read {{ p }}/vision/mode
+{% endif %}
+{% elif user.role == 'ui' %}
+topic read {{ p }}/state/#
+topic read {{ p }}/status
+topic read {{ p }}/event/#
+topic read {{ p }}/sensor/#
+topic write {{ p }}/cmd/action
+topic write {{ p }}/cmd/stop
+topic write {{ p }}/vision/mode
+{% endif %}
+{% endfor %}

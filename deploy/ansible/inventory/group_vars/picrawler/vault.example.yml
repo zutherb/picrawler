@@ -1,0 +1,6 @@
+---
+# Copy to vault.yml, set long random passwords, then encrypt:
+#   ansible-vault encrypt inventory/group_vars/picrawler/vault.yml
+vault_mqtt_password_body: "CHANGE_ME_min_16_chars"
+vault_mqtt_password_arbiter: "CHANGE_ME_min_16_chars"
+vault_mqtt_password_sensor_ultrasonic: "CHANGE_ME_min_16_chars"

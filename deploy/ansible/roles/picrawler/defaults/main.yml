@@ -1,0 +1,65 @@
+---
+picrawler_user: picrawler
+picrawler_robot_id: "1"
+picrawler_install_dir: /opt/picrawler
+picrawler_src_dir: "{{ picrawler_install_dir }}/src"
+picrawler_venv: "{{ picrawler_install_dir }}/venv"
+picrawler_config_dir: /etc/picrawler
+
+# rsync: copy the local checkout from the control machine (default)
+# git:   clone picrawler_git_repo at picrawler_git_version on the Pi
+picrawler_source_mode: rsync
+picrawler_local_source: "{{ playbook_dir }}/../../"
+picrawler_git_repo: ""
+picrawler_git_version: motion-framework
+
+# Pin to a commit SHA for reproducible installs.
+picrawler_robot_hat_repo: https://github.com/sunfounder/robot-hat.git
+picrawler_robot_hat_version: 2.5.x
+picrawler_robot_hat_install_overlays: true
+
+picrawler_pip_packages:
+  - smbus2
+  - paho-mqtt>=2,<3
+
+# Start/enable the units. Keep false until the service code exists.
+picrawler_services_start: false
+
+picrawler_services:
+  - name: body
+    module: services.body
+    description: PiCrawler body (servos, executor, MQTT adapter)
+    mqtt_user: body
+    restart: on-failure
+    stop_timeout: 10
+  - name: arbiter
+    module: services.arbiter
+    description: PiCrawler arbiter (sensor facts to commands)
+    mqtt_user: arbiter
+    restart: on-failure
+    stop_timeout: 5
+
+# Each sensor runs as picrawler-sensor@<name> with MQTT user sensor-<name>.
+picrawler_sensors: []
+
+picrawler_mqtt_host: "127.0.0.1"
+picrawler_mqtt_port: "{{ mosquitto_port | default(1883) }}"
+picrawler_mqtt_secret_dir: "{{ mosquitto_client_secret_dir | default('/etc/picrawler/mqtt') }}"
+
+# body.toml (see docs/target-architecture.md, section 8)
+picrawler_executor_queue_max: 8
+picrawler_executor_lockout_s: 1.0
+picrawler_watchdog_heartbeat_timeout_s: 1.0
+picrawler_watchdog_sit_after_disconnect_s: 5.0
+picrawler_steps_max: 10
+picrawler_allowed_actions:
+  - stand
+  - sit
+  - forward
+  - backward
+  - turn left
+  - turn right
+  - wave
+
+# arbiter.toml
+picrawler_obstacle_stop_cm: 15

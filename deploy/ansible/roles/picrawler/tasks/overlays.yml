@@ -1,0 +1,16 @@
+---
+- name: Find boot overlay directory
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: [/boot/firmware/overlays, /boot/overlays]
+  register: picrawler_overlay_dirs
+
+- name: Copy robot_hat overlays
+  ansible.builtin.copy:
+    src: "{{ picrawler_install_dir }}/robot-hat/dtoverlays/"
+    dest: "{{ (picrawler_overlay_dirs.results | selectattr('stat.exists') | first).item }}/"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  when: picrawler_overlay_dirs.results | selectattr('stat.exists') | list | length > 0

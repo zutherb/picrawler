@@ -1,0 +1,8 @@
+---
+- name: Provision PiCrawler
+  hosts: picrawler
+  become: true
+  roles:
+    - base
+    - mosquitto
+    - picrawler

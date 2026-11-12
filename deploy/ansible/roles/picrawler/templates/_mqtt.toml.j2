@@ -1,0 +1,8 @@
+robot_id = "{{ picrawler_robot_id }}"
+
+[mqtt]
+host = "{{ picrawler_mqtt_host }}"
+port = {{ picrawler_mqtt_port }}
+username = "{{ mqtt_user }}"
+password_file = "{{ picrawler_mqtt_secret_dir }}/{{ mqtt_user }}.pass"
+tls = false

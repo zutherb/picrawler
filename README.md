@@ -1,109 +1,88 @@
-# Picrawler
+# Picrawler motion framework
 
-Picrawler Python library and examples for Raspberry Pi.
+A stripped-down fork of [sunfounder/picrawler](https://github.com/sunfounder/picrawler)
+that only contains the robot's motion stack: leg kinematics, gait
+definitions and servo control. Voice/LLM, audio, camera and sensor code
+has been removed.
 
-Quick Links:
+## Layout
 
-- [Picrawler](#picrawler)
-  - [Docs](#docs)
-  - [Installation](#installation)
-    - [install tool](#install-tool)
-    - [robot-hat library](#robot-hat-library)
-    - [vilib library](#vilib-library)
-    - [picrawler library](#picrawler-library)
-  - [About SunFounder](#about-sunfounder)
-  - [Contact us](#contact-us)
-
-----------------------------------------------
-
-## Docs
-
-- <https://docs.sunfounder.com/projects/pi-crawler/en/latest/>
-
-----------------------------------------------
-
-## Installation
-
-- <https://docs.sunfounder.com/projects/pi-crawler/en/latest/python/python_start/install_all_modules.html>
-
-### install tool
-
-```bash
-sudo apt install git python3-pip python3-setuptools python3-smbus
+```
+picrawler/
+  kinematics.py   # pure math: coord2polar / polar2coord / limits (no hardware)
+  gaits.py        # MoveList: all gaits as frames of 4 [x, y, z] leg tips (no hardware)
+  picrawler.py    # Picrawler(robot_hat.Robot): drives the 12 servos
+tests/            # run off-hardware with a fake robot_hat
+examples/         # motion-only demos (need the real robot)
 ```
 
-### robot-hat library
+`kinematics` and `MoveList` can be imported without `robot_hat`, so you
+can plan or test motions on any machine. `Picrawler` is imported lazily and
+needs `robot_hat` on the Raspberry Pi.
+
+## Installation
 
 ```bash
 cd ~/
 git clone -b 2.5.x --depth=1 https://github.com/sunfounder/robot-hat.git
-cd robot-hat
-sudo python3 install.py
-```
-
-### vilib library
-
-```bash
-cd ~/
-git clone --depth=1 https://github.com/sunfounder/vilib.git
-cd vilib
-sudo python3 install.py
-```
-
-### picrawler library
-
-```bash
-cd ~/
-git clone --depth=1 https://github.com/sunfounder/picrawler.git
+cd robot-hat && sudo python3 install.py
 sudo pip3 install ~/picrawler --break-system-packages
+# for the keyboard examples:
+sudo pip3 install readchar --break-system-packages
 ```
 
-----------------------------------------------
+## Usage
+
+```python
+from picrawler import Picrawler
+
+crawler = Picrawler()
+crawler.do_step('stand', 40)
+crawler.do_action('forward', 2, 70)          # named gait, repeated
+crawler.do_step([[45, 45, -50]] * 4, 60)     # one frame of leg-tip coords (mm)
+crawler.do_single_leg(0, [60, 10, -40], 70)  # move one leg
+crawler.add_action('hop', [[[50, 50, -50]] * 4, [[50, 50, -40]] * 4])
+crawler.do_action('hop')
+crawler.do_step('sit', 40)
+```
+
+Leg order in every frame: right front, left front, left rear, right rear.
+
+Built-in gaits: `stand`, `sit`, `forward`, `backward`, `turn left`,
+`turn right`, `turn left angle`, `turn right angle`, `wave`, `push up`,
+`dance`, `look left`, `look right`, `look up`, `look down`.
+
+Off-hardware kinematics:
+
+```python
+from picrawler import kinematics, MoveList
+
+kinematics.leg_servo_angles([45, 45, -50])  # servo-order angles of one leg
+MoveList()['forward']                        # frames of the forward gait
+```
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -t .
+```
 
 ## Examples
 
-Run examples with `sudo` (required for GPIO/servo access):
+Run with `sudo` on the robot:
 
-```bash
-sudo python3 ~/picrawler/examples/1_move.py
-```
+| Example | Description |
+|---------|-------------|
+| `0_calibration.py` | Servo calibration helper |
+| `1_move.py` | Walk and turn |
+| `2_keyboard_control.py` | W/A/S/D keyboard control |
+| `9_do_step.py` | Custom step coordinates |
+| `10_do_single_leg.py` | Adjust a single leg |
+| `11_record_new_step.py` | Record and replay steps |
+| `12_twist.py` | Twist body motion |
+| `14_preset_actions.py` | Poses (wave, look, push up, …) |
+| `servo_zeroing.py` | Set all servos to 0° for assembly |
 
-| # | Example | Description |
-|---|---------|-------------|
-| 0 | `0_calibration.py` | Servo calibration helper |
-| 1 | `1_move.py` | Basic movement control |
-| 2 | `2_keyboard_control.py` | W/A/S/D keyboard control |
-| 3 | `3_sound_effect.py` | Play sound effects |
-| 4 | `4_avoid.py` | Obstacle avoidance with ultrasonic |
-| 5 | `5_display.py` | Camera / computer vision display |
-| 6 | `6_record_video.py` | Record video from camera |
-| 7 | `7_bull_fight.py` | Bull fight interactive game |
-| 8 | `8_treasure_hunt.py` | Treasure hunt game |
-| 9 | `9_preset_actions.py` | Pose demonstration (wave, nod, etc.) |
-| 10 | `10_do_single_leg.py` | Adjust single leg posture |
-| 11 | `11_record_new_step.py` | Record custom steps via keyboard |
-| 12 | `12_twist.py` | Twist / body rotation |
-| 13 | `13_emotional_robot.py` | Emotional expression robot |
-| 14 | `14_do_step.py` | Custom step coordinate control |
-| | `servo_zeroing.py` | Servo zeroing utility (not numbered) |
-| 15 | `15_stt.py` | Speech-to-text demo |
-| 16 | `16_tts.py` | Text-to-speech demo |
-| 17 | `17_voice_active_crawler_gpt.py` | Voice AI with GPT-4o |
-| 18 | `18_voice_active_crawler_ollama.py` | Voice AI with Ollama (local) |
-| 19 | `19_voice_active_crawler_doubao.py` | Voice AI with Doubao (Chinese) |
+## License
 
-----------------------------------------------
-
-## About SunFounder
-
-SunFounder is a technology company focused on Raspberry Pi and Arduino open source community development. Committed to the promotion of open source culture, we strives to bring the fun of electronics making to people all around the world and enable everyone to be a maker. Our products include learning kits, development boards, robots, sensor modules and development tools. In addition to high quality products, SunFounder also offers video tutorials to help you make your own project. If you have interest in open source or making something cool, welcome to join us!
-
-----------------------------------------------
-
-## Contact us
-
-website:
-    www.sunfounder.com
-
-E-mail:
-    service@sunfounder.com, support@sunfounder.com
+GPLv3, like the upstream project.

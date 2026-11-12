@@ -1,0 +1,10 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Restart picrawler
+  ansible.builtin.systemd_service:
+    name: picrawler.target
+    state: restarted
+  when: picrawler_services_start | bool

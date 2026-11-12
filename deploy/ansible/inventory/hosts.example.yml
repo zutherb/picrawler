@@ -1,0 +1,7 @@
+---
+# Copy to hosts.yml and adjust.
+picrawler:
+  hosts:
+    crawler1:
+      ansible_host: picrawler.local
+      ansible_user: pi

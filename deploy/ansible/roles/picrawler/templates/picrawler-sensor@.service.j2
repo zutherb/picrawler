@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+[Unit]
+Description=PiCrawler sensor %i
+After=network-online.target mosquitto.service
+Wants=network-online.target
+PartOf=picrawler.target
+
+[Service]
+Type=simple
+User={{ picrawler_user }}
+Group={{ picrawler_user }}
+SupplementaryGroups=i2c gpio
+WorkingDirectory={{ picrawler_src_dir }}
+ExecStart={{ picrawler_venv }}/bin/python -m services.sensor_%i --config {{ picrawler_config_dir }}/sensor-%i.toml
+Restart=always
+RestartSec=2
+Environment=PYTHONUNBUFFERED=1
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=picrawler.target

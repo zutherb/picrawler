@@ -1,0 +1,19 @@
+---
+base_user: "{{ picrawler_user | default('picrawler') }}"
+base_home: /var/lib/picrawler
+
+# Reboot automatically when enabling I2C requires it.
+base_reboot_allowed: true
+
+base_packages:
+  - git
+  - rsync
+  - i2c-tools
+  - raspi-config
+  - python3-venv
+  - python3-pip
+  # compiled modules robot_hat needs at import time; installed from apt and
+  # shared into the venv via --system-site-packages
+  - python3-lgpio
+  - python3-pyaudio
+  - python3-pygame

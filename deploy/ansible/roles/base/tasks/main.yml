@@ -1,0 +1,31 @@
+---
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Check whether I2C is enabled
+  ansible.builtin.command: raspi-config nonint get_i2c
+  register: base_i2c_state
+  changed_when: false
+
+- name: Enable I2C
+  ansible.builtin.command: raspi-config nonint do_i2c 0
+  when: base_i2c_state.stdout | trim != "0"
+  changed_when: true
+  notify: Reboot for I2C
+
+- name: Create service user
+  ansible.builtin.user:
+    name: "{{ base_user }}"
+    system: true
+    home: "{{ base_home }}"
+    create_home: true
+    shell: /usr/sbin/nologin
+    groups: [i2c, gpio]
+    append: true
+
+- name: Flush handlers so I2C is active before the robot stack is installed
+  ansible.builtin.meta: flush_handlers

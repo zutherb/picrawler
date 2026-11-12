@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+{% set mqtt_user = 'arbiter' %}
+{% include '_mqtt.toml.j2' %}
+
+[[rule]]
+name = "obstacle_stop"
+when = "sensor/ultrasonic/distance"
+condition = "cm < {{ picrawler_obstacle_stop_cm }}"
+then = { kind = "stop", reason = "obstacle" }
+priority = "safety"
+cooldown_s = 1.0

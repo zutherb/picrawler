@@ -1,0 +1,14 @@
+---
+- name: Require a git repository URL
+  ansible.builtin.assert:
+    that: picrawler_git_repo | length > 0
+    fail_msg: "picrawler_source_mode is git but picrawler_git_repo is empty."
+    quiet: true
+
+- name: Clone picrawler
+  ansible.builtin.git:
+    repo: "{{ picrawler_git_repo }}"
+    dest: "{{ picrawler_src_dir }}"
+    version: "{{ picrawler_git_version }}"
+    depth: 1
+  register: picrawler_source

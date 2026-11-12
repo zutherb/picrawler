@@ -7,7 +7,7 @@ name = "picrawler"
 authors = [
   { name="sunfounder", email="service@sunfounder.com" },
 ]
-description = "Picrawler gait Library for Raspberry Pi"
+description = "Motion framework (kinematics, gaits, servo control) for the SunFounder PiCrawler"
 readme = "README.md"
 requires-python = ">=3.7"
 classifiers = [
@@ -18,7 +18,11 @@ classifiers = [
 keywords = ["picrawler", "sunfounder", "raspberry pi"]
 dynamic = ["version"]
 
-dependencies = ["readchar"]
+dependencies = []
+
+[project.optional-dependencies]
+examples = ["readchar"]
+mqtt = ["paho-mqtt>=2,<3"]
 
 [project.scripts]
 picrawler = "picrawler:__main__"

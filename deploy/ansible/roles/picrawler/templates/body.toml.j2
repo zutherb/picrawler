@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+{% set mqtt_user = 'body' %}
+{% include '_mqtt.toml.j2' %}
+
+[executor]
+queue_max = {{ picrawler_executor_queue_max }}
+lockout_s = {{ picrawler_executor_lockout_s }}
+
+[watchdog]
+heartbeat_timeout_s = {{ picrawler_watchdog_heartbeat_timeout_s }}
+sit_after_disconnect_s = {{ picrawler_watchdog_sit_after_disconnect_s }}
+
+[limits]
+steps_max = {{ picrawler_steps_max }}
+actions = {{ picrawler_allowed_actions | to_json }}

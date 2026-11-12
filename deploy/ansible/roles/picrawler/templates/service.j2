@@ -1,0 +1,28 @@
+# {{ ansible_managed }}
+[Unit]
+Description={{ service.description }}
+After=network-online.target mosquitto.service
+Wants=network-online.target
+PartOf=picrawler.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User={{ picrawler_user }}
+Group={{ picrawler_user }}
+SupplementaryGroups=i2c gpio
+WorkingDirectory={{ picrawler_src_dir }}
+ExecStart={{ picrawler_venv }}/bin/python -m {{ service.module }} --config {{ picrawler_config_dir }}/{{ service.name }}.toml
+# SIGTERM -> controlled shutdown (body: stop and sit down)
+KillSignal=SIGTERM
+TimeoutStopSec={{ service.stop_timeout | default(10) }}
+Restart={{ service.restart | default('on-failure') }}
+RestartSec=2
+Environment=PYTHONUNBUFFERED=1
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=picrawler.target

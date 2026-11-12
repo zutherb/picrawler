@@ -1,0 +1,12 @@
+---
+- name: Reboot to enable I2C
+  ansible.builtin.reboot:
+    msg: "Reboot to enable I2C"
+  when: base_reboot_allowed | bool
+  listen: Reboot for I2C
+
+- name: Ask for a manual reboot
+  ansible.builtin.debug:
+    msg: "I2C was enabled; reboot the Pi manually before using the robot."
+  when: not (base_reboot_allowed | bool)
+  listen: Reboot for I2C

@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+{% set mqtt_user = 'sensor-' ~ sensor %}
+{% include '_mqtt.toml.j2' %}
+
+[sensor]
+name = "{{ sensor }}"

@@ -1,8 +1,6 @@
 from picrawler import Picrawler
-from robot_hat import Music
 from time import sleep
 
-music = Music()
 crawler = Picrawler()
 
 def twist(speed):
@@ -25,9 +23,6 @@ def main():
     try:
         crawler.do_step('stand', 40)
         sleep(1.0)
-
-        music.music_play('./musics/sports-Ahjay_Stelino.mp3')
-        music.music_set_volume(20)
 
         while True:
             twist(speed=55)

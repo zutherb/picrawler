@@ -1,0 +1,16 @@
+---
+mosquitto_listen_address: "127.0.0.1"
+mosquitto_port: 1883
+
+# Listening on a non-local address without TLS sends passwords in clear
+# text. Refused unless you set this to true (e.g. isolated robot network).
+mosquitto_allow_plaintext_remote: false
+
+mosquitto_robot_id: "{{ picrawler_robot_id | default('1') }}"
+
+# Plaintext client credentials for local services, readable only by this user.
+mosquitto_client_secret_dir: /etc/picrawler/mqtt
+mosquitto_client_secret_owner: "{{ picrawler_user | default('picrawler') }}"
+
+# List of {name, role: body|arbiter|sensor|ui, sensor?, password}
+mosquitto_users: []

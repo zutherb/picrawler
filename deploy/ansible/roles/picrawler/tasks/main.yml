@@ -1,0 +1,135 @@
+---
+- name: Check that every service and sensor has an MQTT account
+  ansible.builtin.assert:
+    that:
+      - (picrawler_services | map(attribute='mqtt_user') | list
+         + picrawler_sensors | map('regex_replace', '^(.*)$', 'sensor-\1') | list)
+        | difference(mosquitto_users | default([]) | map(attribute='name') | list) | length == 0
+    fail_msg: "Each service/sensor needs a matching entry in mosquitto_users (sensors: sensor-<name>)."
+    quiet: true
+
+- name: Create install directory
+  ansible.builtin.file:
+    path: "{{ picrawler_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create config directory
+  ansible.builtin.file:
+    path: "{{ picrawler_config_dir }}"
+    state: directory
+    owner: root
+    group: "{{ picrawler_user }}"
+    mode: "0750"
+
+- name: Deploy source
+  ansible.builtin.include_tasks: "source_{{ picrawler_source_mode }}.yml"
+
+- name: Fetch robot_hat
+  ansible.builtin.git:
+    repo: "{{ picrawler_robot_hat_repo }}"
+    dest: "{{ picrawler_install_dir }}/robot-hat"
+    version: "{{ picrawler_robot_hat_version }}"
+    depth: 1
+  register: picrawler_robot_hat_src
+
+- name: Install robot_hat device tree overlays
+  ansible.builtin.include_tasks: overlays.yml
+  when: picrawler_robot_hat_install_overlays | bool
+
+- name: Create virtualenv
+  ansible.builtin.command: python3 -m venv --system-site-packages {{ picrawler_venv }}
+  args:
+    creates: "{{ picrawler_venv }}/bin/python"
+
+- name: Install python dependencies
+  ansible.builtin.pip:
+    name: "{{ picrawler_pip_packages }}"
+    virtualenv: "{{ picrawler_venv }}"
+
+- name: Install robot_hat and picrawler into the virtualenv
+  ansible.builtin.include_tasks: pip_local.yml
+  loop:
+    - name: robot_hat
+      path: "{{ picrawler_install_dir }}/robot-hat"
+      changed: "{{ picrawler_robot_hat_src.changed }}"
+    - name: picrawler
+      path: "{{ picrawler_src_dir }}"
+      changed: "{{ picrawler_source.changed }}"
+  loop_control:
+    loop_var: pkg
+    label: "{{ pkg.name }}"
+
+- name: Write service configs
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ picrawler_config_dir }}/{{ item.dest }}"
+    owner: root
+    group: "{{ picrawler_user }}"
+    mode: "0640"
+  loop:
+    - { src: body.toml.j2, dest: body.toml }
+    - { src: arbiter.toml.j2, dest: arbiter.toml }
+  loop_control:
+    label: "{{ item.dest }}"
+  notify: Restart picrawler
+
+- name: Write sensor configs
+  ansible.builtin.template:
+    src: sensor.toml.j2
+    dest: "{{ picrawler_config_dir }}/sensor-{{ sensor }}.toml"
+    owner: root
+    group: "{{ picrawler_user }}"
+    mode: "0640"
+  loop: "{{ picrawler_sensors }}"
+  loop_control:
+    loop_var: sensor
+  notify: Restart picrawler
+
+- name: Install service units
+  ansible.builtin.template:
+    src: service.j2
+    dest: "/etc/systemd/system/picrawler-{{ service.name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ picrawler_services }}"
+  loop_control:
+    loop_var: service
+    label: "{{ service.name }}"
+  notify: [Reload systemd, Restart picrawler]
+
+- name: Install sensor unit template and target
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - picrawler-sensor@.service
+    - picrawler.target
+  notify: [Reload systemd, Restart picrawler]
+
+- name: Reload systemd before enabling units
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the robot stack
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: >-
+    {{ ['picrawler.target']
+       + picrawler_services | map(attribute='name') | map('regex_replace', '^(.*)$', 'picrawler-\1.service') | list
+       + picrawler_sensors | map('regex_replace', '^(.*)$', 'picrawler-sensor@\1.service') | list }}
+  when: picrawler_services_start | bool
+
+- name: Remind that services are not started
+  ansible.builtin.debug:
+    msg: >-
+      Units are installed but not started (picrawler_services_start: false).
+      Enable it once services/body etc. exist.
+  when: not (picrawler_services_start | bool)
