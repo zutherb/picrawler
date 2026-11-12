@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+{% set mqtt_user = 'ui' %}
+{% include '_mqtt.toml.j2' %}
+
+[http]
+listen = "{{ picrawler_web_listen }}"
+allow_plaintext = {{ picrawler_web_allow_plaintext | bool | lower }}
+vision_stream = "http://127.0.0.1:8081/stream.mjpg"
+{% if picrawler_web_tls | bool %}
+cert = "{{ picrawler_config_dir }}/web-tls/cert.pem"
+key = "{{ picrawler_config_dir }}/web-tls/key.pem"
+{% endif %}
+
+[log]
+path = "{{ picrawler_web_state_dir }}/log.db"
+retention_days = {{ picrawler_web_log_retention_days }}
+min_score = 0.5
+start_frames = 3
+end_after_s = 2.0
+
+[system]
+units = {{ (picrawler_services | map(attribute='name') | map('regex_replace', '^(.*)$', 'picrawler-\\1.service') | list
+            + picrawler_sensors | map('regex_replace', '^(.*)$', 'picrawler-sensor@\\1.service') | list) | to_json }}
+{% for user in picrawler_web_users %}
+
+[users.{{ user.name }}]
+role = "{{ user.role }}"
+password_hash = "{{ user.password_hash }}"
+{% endfor %}

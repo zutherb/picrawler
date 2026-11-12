@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PiCrawler log</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main>
+    <section class="panel">
+      <h2>Object log</h2>
+      <form class="row" id="filters">
+        <select name="label" id="label"><option value="">all labels</option></select>
+        <select name="kind">
+          <option value="">sightings and events</option>
+          <option value="sighting">sightings</option>
+          <option value="event">events</option>
+        </select>
+        <label class="muted">from <input type="datetime-local" name="since"></label>
+        <label class="muted">to <input type="datetime-local" name="until"></label>
+        <label class="muted">min score <input type="number" name="min_score" min="0" max="1" step="0.05"></label>
+        <button type="submit" class="primary">Apply</button>
+        <a class="button" id="csv" href="/api/log.csv">CSV</a>
+        <label class="muted"><input type="checkbox" id="live" checked> live</label>
+      </form>
+    </section>
+    <section class="panel">
+      <table>
+        <thead>
+          <tr><th>Start</th><th>End</th><th>Label</th><th>Score</th><th>Count</th><th>Details</th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p class="muted" id="summary"></p>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+  <script src="/static/log.js"></script>
+</body>
+</html>

@@ -58,8 +58,16 @@ class Rule:
         if self.priority == "safety" and self.then["kind"] != "stop":
             raise ValueError("rule %s: only stop can have priority safety" % self.name)
         self.cooldown_s = spec.get("cooldown_s", 1.0)
+        # Only fire while one of these actions is running, e.g. ["forward"]
+        # for the obstacle stop, so the crawler can still turn or back away.
+        self.when_motion = tuple(spec.get("when_motion", ()))
         self.window = collections.deque(maxlen=spec.get("median_of", 3))
         self.last_fired = None
+
+    def motion_matches(self, motion):
+        if not self.when_motion:
+            return True
+        return motion.get("status") == "running" and motion.get("name") in self.when_motion
 
     def feed(self, payload):
         """Add a reading; True if the debounced condition holds."""
@@ -81,7 +89,6 @@ class Arbiter:
         cfg = cfg or {}
         self.publish = publish            # fn(suffix, payload, qos, retain)
         self.rules = [Rule(spec) for spec in cfg.get("rule", [])]
-        self.wander = Wander(self, cfg.get("wander", {}))
         self._wall = wall
         self._mono = mono
         self._last_heartbeat = None
@@ -89,6 +96,10 @@ class Arbiter:
         self._sensor_offline = set()
         self.body_online = False
         self.motion = {}                  # last state/motion payload
+        # Manual control comes first: while it is active, wander pauses.
+        self.manual = Manual(self, cfg.get("manual", {}))
+        self.wander = Wander(self, cfg.get("wander", {}))
+        self.behaviors = (self.manual, self.wander)
 
     # --- incoming ---
 
@@ -99,11 +110,13 @@ class Arbiter:
         if suffix == "state/motion":
             if isinstance(payload, dict):
                 self.motion = payload
-                self.wander.on_motion(payload)
+                for behavior in self.behaviors:
+                    behavior.on_motion(payload)
             return
         if suffix == "event/rejected":
             if isinstance(payload, dict):
-                self.wander.on_rejected(payload)
+                for behavior in self.behaviors:
+                    behavior.on_rejected(payload)
             return
         sensor = sensor_of(suffix)
         if sensor is None:
@@ -117,7 +130,8 @@ class Arbiter:
         for rule in self.rules:
             if rule.when == suffix and rule.feed(payload):
                 self._fire(rule)
-        self.wander.on_reading(suffix, payload)
+        for behavior in self.behaviors:
+            behavior.on_reading(suffix, payload)
 
     def _on_sensor_status(self, sensor, payload):
         online = isinstance(payload, dict) and payload.get("status") == "online"
@@ -134,10 +148,15 @@ class Arbiter:
         return (sensor not in self._sensor_offline and seen is not None
                 and self._mono() - seen <= STALE_S)
 
+    def body_idle(self):
+        return self.motion.get("status", "idle") == "idle" and not self.motion.get("queue_len", 0)
+
     # --- rules ---
 
     def _fire(self, rule):
         now = self._mono()
+        if not rule.motion_matches(self.motion):
+            return
         if rule.last_fired is not None and now - rule.last_fired < rule.cooldown_s:
             return
         rule.last_fired = now
@@ -169,34 +188,20 @@ class Arbiter:
         for rule in self.rules:
             if not self.sensor_fresh(rule.sensor):
                 rule.reset()
-        self.wander.tick()
+        for behavior in self.behaviors:
+            behavior.tick()
 
 
-class Wander:
-    """Optional demo goal: walk forward, turn away from obstacles.
+class Behavior:
+    """A goal source that keeps at most one command in flight."""
 
-    Off by default. Only acts on fresh distance readings while the body is
-    online and idle, one command at a time. The safety stop rule still
-    does the actual emergency stop.
-    """
-
-    def __init__(self, arbiter, cfg):
+    def __init__(self, arbiter):
         self.arbiter = arbiter
-        self.enabled = cfg.get("enabled", False)
-        self.topic = cfg.get("topic", "sensor/ultrasonic/distance")
-        self.sensor = sensor_of(self.topic)
-        self.clear_cm = cfg.get("clear_cm", 25.0)
-        self.speed = cfg.get("speed", 70)
-        self.turn = cfg.get("turn", "turn left")
-        self.distance = None
         self.pending = None               # (command id, mono time sent)
         self.next_send = 0.0
 
     def on_reading(self, suffix, payload):
-        if suffix == self.topic and isinstance(payload, dict):
-            cm = payload.get("cm")
-            if isinstance(cm, (int, float)) and not isinstance(cm, bool):
-                self.distance = cm
+        pass
 
     def on_motion(self, payload):
         if self.pending and payload.get("command_id") == self.pending[0] \
@@ -209,20 +214,121 @@ class Wander:
             self.pending = None
             self.next_send = self.arbiter._mono() + RETRY_AFTER_REJECT_S
 
-    def tick(self):
+    def ready(self):
+        """True if a new command may be sent now."""
         a = self.arbiter
-        if not self.enabled or not a.body_online or not a.sensor_fresh(self.sensor):
-            return
-        if self.distance is None:
-            return
         now = a._mono()
-        if now < self.next_send:
-            return
+        if not a.body_online or now < self.next_send:
+            return False
         if self.pending:
             if now - self.pending[1] < PENDING_TIMEOUT_S:
-                return
+                return False
             self.pending = None
-        if a.motion.get("status", "idle") != "idle" or a.motion.get("queue_len", 0):
+        return a.body_idle()
+
+    def send(self, name, speed):
+        a = self.arbiter
+        self.pending = (a.send_action(name, steps=1, speed=speed, priority="goal"), a._mono())
+
+    def tick(self):
+        pass
+
+
+class Manual(Behavior):
+    """Gamepad control: stick walks and turns, buttons trigger actions.
+
+    Active while the gamepad has been used within hold_s; during that time
+    wander pauses. Commands are plain goals, so the safety stop still wins.
+    """
+
+    DEFAULT_BUTTONS = {"BTN_SOUTH": "stand", "BTN_EAST": "sit", "BTN_NORTH": "wave"}
+
+    def __init__(self, arbiter, cfg):
+        super().__init__(arbiter)
+        self.enabled = cfg.get("enabled", True)
+        self.topic = cfg.get("topic", "sensor/gamepad/state")
+        self.sensor = sensor_of(self.topic)
+        self.speed = cfg.get("speed", 70)
+        self.threshold = cfg.get("threshold", 0.5)
+        self.hold_s = cfg.get("hold_s", 3.0)
+        self.buttons = dict(cfg.get("buttons", self.DEFAULT_BUTTONS))
+        self.stop_button = cfg.get("stop_button", "BTN_SELECT")
+        self.stick = (0.0, 0.0)
+        self.pressed = set()
+        self.queued_button = None
+        self.last_input = None
+
+    def active(self):
+        a = self.arbiter
+        return (self.enabled and self.last_input is not None and a.sensor_fresh(self.sensor)
+                and a._mono() - self.last_input <= self.hold_s)
+
+    def on_reading(self, suffix, payload):
+        if not self.enabled or suffix != self.topic or not isinstance(payload, dict):
             return
-        name = "forward" if self.distance > self.clear_cm else self.turn
-        self.pending = (a.send_action(name, steps=1, speed=self.speed, priority="goal"), now)
+        x, y = payload.get("x", 0.0), payload.get("y", 0.0)
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (x, y)):
+            return
+        buttons = payload.get("buttons", [])
+        pressed = {b for b in buttons if isinstance(b, str)} if isinstance(buttons, list) else set()
+        new = pressed - self.pressed
+        self.stick, self.pressed = (x, y), pressed
+        if max(abs(x), abs(y)) >= self.threshold or pressed:
+            self.last_input = self.arbiter._mono()
+        if self.stop_button in new:
+            self.queued_button = None
+            self.arbiter.send_stop(reason="gamepad")
+            return
+        for button in sorted(new):
+            if button in self.buttons:
+                self.queued_button = self.buttons[button]
+
+    def stick_action(self):
+        x, y = self.stick
+        if max(abs(x), abs(y)) < self.threshold:
+            return None
+        if abs(y) >= abs(x):
+            return "forward" if y < 0 else "backward"   # evdev: up is negative
+        return "turn right" if x > 0 else "turn left"
+
+    def tick(self):
+        if not self.active() or not self.ready():
+            return
+        name = self.queued_button or self.stick_action()
+        if name is None:
+            return
+        self.queued_button = None
+        self.send(name, self.speed)
+
+
+class Wander(Behavior):
+    """Optional demo goal: walk forward, turn away from obstacles.
+
+    Off by default. Only acts on fresh distance readings while the body is
+    online and idle, one command at a time, and pauses while the gamepad
+    is in use. The safety stop rule still does the actual emergency stop.
+    """
+
+    def __init__(self, arbiter, cfg):
+        super().__init__(arbiter)
+        self.enabled = cfg.get("enabled", False)
+        self.topic = cfg.get("topic", "sensor/ultrasonic/distance")
+        self.sensor = sensor_of(self.topic)
+        self.clear_cm = cfg.get("clear_cm", 25.0)
+        self.speed = cfg.get("speed", 70)
+        self.turn = cfg.get("turn", "turn left")
+        self.distance = None
+
+    def on_reading(self, suffix, payload):
+        if suffix == self.topic and isinstance(payload, dict):
+            cm = payload.get("cm")
+            if isinstance(cm, (int, float)) and not isinstance(cm, bool):
+                self.distance = cm
+
+    def tick(self):
+        a = self.arbiter
+        if not self.enabled or self.distance is None or not a.sensor_fresh(self.sensor):
+            return
+        if a.manual.active() or not self.ready():
+            return
+        self.send("forward" if self.distance > self.clear_cm else self.turn, self.speed)

@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+{% set mqtt_user = 'sensor-vision' %}
+{% include '_mqtt.toml.j2' %}
+
+[vision]
+mode = "{{ picrawler_vision_mode }}"
+max_rate_hz = 10
+
+[camera]
+size = {{ picrawler_vision_size | to_json }}
+lores = [300, 300]
+fps = {{ picrawler_vision_fps }}
+quality = 70
+
+[stream]
+host = "127.0.0.1"
+port = 8081
+
+[detect]
+model = "{{ picrawler_vision_model_dir }}/{{ picrawler_vision_model_url | basename }}"
+labels = "{{ picrawler_vision_model_dir }}/{{ picrawler_vision_labels_url | basename }}"
+threshold = {{ picrawler_vision_threshold }}

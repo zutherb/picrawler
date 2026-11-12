@@ -1,6 +1,8 @@
 ---
 base_user: "{{ picrawler_user | default('picrawler') }}"
 base_home: /var/lib/picrawler
+# Separate, less privileged user for the web UI (Bluetooth, journal, polkit).
+base_web_user: "{{ picrawler_web_user | default('picrawler-web') }}"
 
 # Reboot automatically when enabling I2C requires it.
 base_reboot_allowed: true
@@ -17,3 +19,12 @@ base_packages:
   - python3-lgpio
   - python3-pyaudio
   - python3-pygame
+  # services: camera, gamepad, web UI
+  - python3-picamera2
+  - python3-numpy
+  - python3-evdev
+  - python3-aiohttp
+  - bluez
+  - mosquitto-clients
+  # polkit rules let the web user restart units without sudo
+  - polkitd

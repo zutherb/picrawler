@@ -27,10 +27,12 @@ picrawler/
 services/         # python -m services.<name> --config x.toml [--fake]; needs Python 3.11 (tomllib)
   common/         # config, paho wrapper (Bus), schema validation
   body/           # BodyAdapter: MQTT <-> executor, watchdog
-  arbiter/        # Arbiter: rules, heartbeat, optional wander
-  sensor_ultrasonic/
+  arbiter/        # Arbiter: rules, heartbeat, Manual (gamepad), Wander
+  sensor_ultrasonic/, sensor_gamepad/
+  vision/         # camera, MJPEG on 127.0.0.1:8081, Edge TPU detector
+  web/            # aiohttp UI: login, SSE, object log, admin; static/ has no inline JS (CSP)
 deploy/ansible/   # Pi provisioning; unit names/configs must match services/
-tests/            # unittest; tests/fake_robot_hat.py stands in for the hardware
+tests/            # unittest; tests/fake_robot_hat.py stands in for the hardware; aiohttp/numpy tests skip if missing
 examples/         # motion demos, must run on the robot with sudo
 ```
 

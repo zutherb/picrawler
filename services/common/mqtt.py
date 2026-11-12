@@ -97,3 +97,42 @@ class Bus:
         except (UnicodeDecodeError, ValueError):
             payload = None
         self.on_message(suffix, payload, bool(msg.retain))
+
+
+class NullBus:
+    """Same interface as Bus, without a broker (for --fake runs on a laptop)."""
+
+    def __init__(self, cfg=None, client_id=None, status_topic="status", verbose=False):
+        self.prefix = config.topic_prefix(cfg or {})
+        self.on_message = None
+        self.on_connect = None
+        self.on_disconnect = None
+        self.verbose = verbose
+
+    def subscribe(self, suffix, qos=1):
+        pass
+
+    def publish(self, suffix, payload, qos=0, retain=False):
+        if self.verbose:
+            print("publish %s %s" % (suffix, encode(payload)))
+
+    def publish_status(self, status, **extra):
+        self.publish("status", {"status": status, **extra})
+
+    def start(self):
+        if self.on_connect:
+            self.on_connect()
+
+    def stop(self, status="offline"):
+        pass
+
+    def inject(self, suffix, payload, retain=False):
+        """Deliver a message as if it came from the broker."""
+        if self.on_message:
+            self.on_message(suffix, payload, retain)
+
+
+def make_bus(cfg, client_id, status_topic="status", fake=False):
+    if fake and "mqtt" not in cfg:
+        return NullBus(cfg, client_id, status_topic)
+    return Bus(cfg, client_id, status_topic)

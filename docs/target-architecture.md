@@ -67,23 +67,24 @@ picrawler/
 services/             # one process per service: python -m services.<name> --config …
   common/             # config.py, mqtt.py (paho wrapper), schema.py (payload validation)
   body/               # adapter.py (BodyAdapter), __main__.py
-  arbiter/            # arbiter.py (rules, wander), __main__.py
+  arbiter/            # arbiter.py (rules, Manual, Wander), __main__.py
   sensor_ultrasonic/  # __main__.py
-services/vision/      # camera + Coral, see section 7
-  __main__.py
-  camera.py           # picamera2: main stream + lores stream
-  stream.py           # MJPEG over HTTP
-  inference.py        # TPU models, only the newest frame each time
-  imprint.py          # learn custom objects
-services/web/         # web interface, see section 8
-  __main__.py
-  app.py              # aiohttp: routes, login, SSE, stream proxy
-  sightings.py        # detections → sightings (object log)
-  store.py            # SQLite
-  bluetooth.py        # BlueZ over D-Bus
-  system.py           # services/system via polkit
-  static/             # HTML, CSS, JS, without CDN
-services/gamepad/     # Bluetooth controller via evdev
+  sensor_gamepad/     # gamepad.py (normalization), __main__.py (evdev), section 8.8
+  vision/             # camera + Coral, see section 7
+    camera.py         # picamera2: main stream + lores stream; test card for --fake
+    stream.py         # MJPEG over HTTP, 127.0.0.1 only
+    inference.py      # Edge TPU detector (pycoral / tflite_runtime / ai_edge_litert)
+    __main__.py       # imprint.py (learn custom objects) is planned
+  web/                # web interface, see section 8
+    app.py            # aiohttp: routes, login, SSE, stream proxy
+    auth.py           # scrypt, sessions, rate limit; hashpw.py prints a hash
+    state.py          # MQTT messages → status snapshot, log, SSE pushes
+    sightings.py      # detections → sightings (object log)
+    store.py          # SQLite
+    bluetooth.py      # bluetoothctl
+    system.py         # units/journal/power via systemctl + polkit
+    metrics.py        # CPU, memory, disk, load from /proc
+    static/           # HTML, CSS, JS, without CDN
 tests/
 ```
 
@@ -184,6 +185,10 @@ JSON in UTF-8 and contain `ts` (Unix time in seconds, float).
 | `event/rejected` | Body → | 1 | no |
 | `event/watchdog` | Body → | 1 | no |
 | `arbiter/status` | Arbiter → | 1 | yes (LWT `offline`) |
+| `event/stop` | Body → | 1 | no (`{"reason", "sit"}`, for the object log) |
+| `sensor/gamepad/state` | gamepad → | 0 | no (`{"x", "y", "buttons"}`, x/y in −1..1, up is negative) |
+| `sensor/gamepad/status` | gamepad → | 1 | yes (LWT `offline`, plus `connected`, `name`) |
+| `web/status` | web → | 1 | yes (LWT `offline`) |
 
 The body only accepts GOAL commands if a `cmd/heartbeat` arrived in the last
 second. Otherwise the watchdog would abort them immediately anyway.
@@ -369,6 +374,20 @@ New rules, all with priority `goal` unless stated otherwise:
 - **Privacy:** no recording by default, stream only on the LAN with
   login, no identification of persons.
 
+### 7.7 Implementation status
+
+- Implemented: modes `detect` and `off`, MJPEG stream on `127.0.0.1:8081`
+  (`/stream.mjpg`, `/snapshot.jpg`), status every 2 s, detections limited
+  to `max_rate_hz`. Default model: the Coral test model SSD MobileNet v2
+  (COCO, 300×300), downloaded by Ansible.
+- `pose` and `imprint` are accepted by the UI but answered with an `error`
+  in `sensor/vision/status` until they are built (M7).
+- The TPU route is not fixed yet (spike M-V0); `inference.py` tries
+  pycoral, tflite_runtime and ai_edge_litert with the `libedgetpu` delegate.
+  If none loads, the service streams and reports `tpu: false`.
+- picamera2's `RGB888` is B, G, R in memory; the lores frame is flipped to
+  RGB before inference.
+
 ## 8. Web interface (web-service)
 
 Separate service `services/web/`, decoupled from the vision-service. Reason: the
@@ -382,7 +401,7 @@ stream generation and detection keep running, and vice versa.
 Browser ──HTTP──► web-service :8080 ─┬─ /stream.mjpg ──► vision-service 127.0.0.1:8081 (Proxy)
    ▲                                 ├─ MQTT (user ui): sensor/#, state/#, status, event/#
    └──── Server-Sent Events ─────────┤                cmd/stop, cmd/action, vision/mode
-                                     └─ BlueZ (D-Bus)  ──► Bluetooth controller
+                                     └─ bluetoothctl   ──► Bluetooth controller
 ```
 
 - The vision-service now listens only on `127.0.0.1`. From outside, the
@@ -391,7 +410,8 @@ Browser ──HTTP──► web-service :8080 ─┬─ /stream.mjpg ──► v
   This is simpler than WebSockets and sufficient, because
   commands from the browser arrive as normal POST requests.
 - Technology: `aiohttp` (one package for HTTP, SSE and the stream proxy, also available as
-  `python3-aiohttp` via apt), BlueZ via `dbus-fast`, frontend as
+  `python3-aiohttp` via apt), BlueZ via `bluetoothctl` (no extra Python
+  dependency; arguments are passed as lists, MAC addresses validated), frontend as
   static HTML/CSS/JS **without a build step and without CDN**. The page must
   work without internet.
 
@@ -441,12 +461,11 @@ the arbiter needs the raw per-frame data.
   (Xbox, PlayStation, 8BitDo).
 - List of paired devices with status (connected, battery if reported),
   disconnect, remove.
-- This includes a separate **gamepad-service** (`services/gamepad/`) that reads the
-  connected controller via `evdev` and publishes under `sensor/gamepad/*`.
-  How the buttons are mapped to commands and how
-  manual control is prioritized relative to autonomy will be defined in a
-  separate section. The ultrasonic stop (`safety`) also applies
-  during manual control.
+- This includes a separate **gamepad-service** (`services/sensor_gamepad/`)
+  that reads the connected controller via `evdev` and publishes under
+  `sensor/gamepad/*`. Button mapping and priority: section 8.8.
+- **Gamepad input** panel: live stick values and names of pressed buttons,
+  to adapt the mapping to any controller.
 
 **Vision**: switch mode (`detect`/`pose`/`imprint`/`off`) via
 `vision/mode`; imprinting (hold an object in front of the camera, assign a name,
@@ -455,9 +474,16 @@ learn, delete learned classes).
 **Services**: status of all `picrawler-*` units, restart of individual services,
 latest log lines from the journal.
 
-**System**: CPU temperature, throttling (`vcgencmd get_throttled`),
-battery voltage if available, shutdown and reboot (with
-confirmation dialog). Shutdown makes the crawler sit down first.
+**System**: CPU usage, load, memory, disk, CPU temperature, throttling
+(`vcgencmd get_throttled`), memory per service (systemd `MemoryCurrent`),
+refreshed every 2 s; shutdown and reboot (with confirmation dialog).
+Shutdown makes the crawler sit down first. Battery voltage: not available
+from the Robot HAT yet.
+
+**Metrics history**: no Prometheus on the Pi (RAM and SD card writes for a
+single robot). The admin page reads `/proc` directly. For history over days,
+install `node_exporter` on the Pi (~15 MB RAM) and run Prometheus/Grafana on
+another machine that scrapes it.
 
 ### 8.5 Security
 
@@ -512,6 +538,27 @@ thumbnails = false
 - Development on a Mac without a Pi: `python -m services.web --fake` delivers a
   test image instead of the stream and generates random detections.
 
+### 8.8 Manual control (gamepad)
+
+Decided: the gamepad takes **precedence over autonomy**, but stays below the
+safety layer.
+
+- `services.sensor_gamepad` picks up any device with two stick axes and
+  joystick/gamepad buttons (deliberately loose, generic Bluetooth pads often
+  report `BTN_TRIGGER`/`BTN_THUMB` instead of `BTN_SOUTH`). `device_name`
+  narrows it down. It publishes facts only.
+- The arbiter's `Manual` behaviour turns them into goal commands, one at a
+  time while the body is idle: stick up/down → `forward`/`backward`,
+  left/right → `turn left`/`turn right` (threshold 0.5), button edges →
+  actions from `[manual] buttons`, `stop_button` → `cmd/stop`.
+- While the pad was used within `hold_s` (3 s), `Wander` pauses.
+- The obstacle stop keeps working. It has `when_motion = ["forward"]`, so it
+  only fires while walking forward: in front of a wall the crawler can still
+  turn or back away instead of being locked out by repeated stops.
+- Tested pads: none on the device yet. SteelSeries Nimbus is the target; if
+  its button names differ, read them on the admin page and set
+  `picrawler_manual_buttons`.
+
 ## 9. Configuration (`body.toml`)
 
 ```toml
@@ -560,11 +607,11 @@ actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wa
 | M3 ✅ (device test pending) | `services.arbiter` + `services.sensor_ultrasonic`, optional `[wander]` | Robot walks forward and stops in front of an obstacle (< 15 cm) |
 | M4 | Further sensors / external control | New sensor connected without changes to `picrawler/` |
 | M-V0 | Spike Coral software (independent of M1–M3, can start immediately) | SSD MobileNet v2 runs on the TPU on the target Pi, measured inference time and chosen installation path are recorded here |
-| M5 | vision-service: stream + `detect` + status | Stream in the browser with login, detections under `sensor/vision/detections`, stream keeps running when the TPU is unplugged |
+| M5 ✅ (device test pending) | vision-service: stream + `detect` + status | Stream in the browser with login, detections under `sensor/vision/detections`, stream keeps running when the TPU is unplugged |
 | M6 | Follow me | Crawler follows a person, stops after 2 s of loss and at an obstacle |
 | M7 | `pose` gestures + imprinting | Raise arm → stand up, wave → wave, learned object is found |
-| M-W1 | web-service: login, live page, object log, emergency stop (can be developed independently of M5 with `--fake`) | Sighting tests green, stream and log in the browser, emergency stop stops the crawler, viewer cannot access admin pages |
-| M-W2 | Admin: Bluetooth, vision mode, services, system + gamepad-service | Controller can be paired via the page and reconnects by itself after reboot, crawler controllable via gamepad, ultrasonic stop also takes effect then |
+| M-W1 ✅ (device test pending) | web-service: login, live page, object log, emergency stop (can be developed independently of M5 with `--fake`) | Sighting tests green, stream and log in the browser, emergency stop stops the crawler, viewer cannot access admin pages |
+| M-W2 ✅ (device test pending) | Admin: Bluetooth, vision mode, services, system + gamepad-service | Controller can be paired via the page and reconnects by itself after reboot, crawler controllable via gamepad, ultrasonic stop also takes effect then |
 
 ## 12. Hardware (decided)
 
@@ -586,7 +633,6 @@ actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wa
 - How long does a frame actually take at typical `speed`? This determines
   whether the reaction time of a stop is sufficient.
 - Should Home Assistant or similar be connected in addition to the own web interface (section 8)?
-- Which controller exactly? Button mapping and pairing depend on it.
-- Manual control via gamepad: separate priority `manual` between `goal` and
-  `reflex`, or does it switch off autonomy completely?
+- Does the SteelSeries Nimbus pair with BlueZ and show up in evdev? If not,
+  any other Bluetooth pad works with the same code (section 8.8).
 - How long does a model switch (`detect` ↔ `pose`) take on the TPU?

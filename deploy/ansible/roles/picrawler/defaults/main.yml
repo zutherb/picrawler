@@ -1,5 +1,8 @@
 ---
 picrawler_user: picrawler
+picrawler_web_user: picrawler-web
+picrawler_state_dir: /var/lib/picrawler
+picrawler_web_state_dir: /var/lib/picrawler-web    # home of the web user (base role)
 picrawler_robot_id: "1"
 picrawler_install_dir: /opt/picrawler
 picrawler_src_dir: "{{ picrawler_install_dir }}/src"
@@ -39,6 +42,21 @@ picrawler_services:
     mqtt_user: arbiter
     restart: on-failure
     stop_timeout: 5
+  - name: vision
+    module: services.vision
+    description: PiCrawler vision (camera, stream, Coral TPU)
+    mqtt_user: sensor-vision
+    groups: [video, apex]
+    restart: on-failure
+    stop_timeout: 5
+  - name: web
+    module: services.web
+    description: PiCrawler web UI (live video, object log, admin)
+    mqtt_user: ui
+    user: "{{ picrawler_web_user }}"
+    groups: [bluetooth, systemd-journal, video]
+    restart: on-failure
+    stop_timeout: 5
 
 # Each sensor runs as picrawler-sensor@<name> with MQTT user sensor-<name>.
 picrawler_sensors: []
@@ -64,6 +82,13 @@ picrawler_allowed_actions:
 
 # arbiter.toml
 picrawler_obstacle_stop_cm: 15
+# Manual control with a gamepad; button names: see the admin page.
+picrawler_manual_speed: 70
+picrawler_manual_buttons:
+  BTN_SOUTH: stand
+  BTN_EAST: sit
+  BTN_NORTH: wave
+picrawler_manual_stop_button: BTN_SELECT
 picrawler_wander_enabled: false
 picrawler_wander_clear_cm: 25
 picrawler_wander_speed: 70
@@ -74,3 +99,28 @@ picrawler_sensor_settings:
     rate_hz: 10
     trig_pin: D2
     echo_pin: D3
+  gamepad:
+    rate_hz: 10
+    device_name: ""        # substring of the pad name; empty = first gamepad found
+    deadzone: 0.15
+
+# vision.toml
+picrawler_vision_mode: detect
+picrawler_vision_size: [960, 540]
+picrawler_vision_fps: 15
+picrawler_vision_model_dir: "{{ picrawler_state_dir }}/vision/models"
+# Coral test model (SSD MobileNet v2, COCO) from google-coral/test_data
+picrawler_vision_download_models: true
+picrawler_vision_model_url: https://github.com/google-coral/test_data/raw/master/ssd_mobilenet_v2_coco_quant_postprocess_edgetpu.tflite
+picrawler_vision_labels_url: https://github.com/google-coral/test_data/raw/master/coco_labels.txt
+picrawler_vision_threshold: 0.4
+
+# web.toml
+picrawler_web_listen: "0.0.0.0:8080"
+# Self-signed certificate, so passwords never cross the WLAN in clear text.
+# The browser warns once; accept the certificate for this host.
+picrawler_web_tls: true
+picrawler_web_allow_plaintext: false
+# [{name, role: admin|viewer, password_hash}], hash: python -m services.web.hashpw
+picrawler_web_users: []
+picrawler_web_log_retention_days: 7

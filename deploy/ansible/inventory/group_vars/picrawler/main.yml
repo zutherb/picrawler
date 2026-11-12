@@ -8,6 +8,7 @@ picrawler_services_start: false
 # Sensors that run on the Pi itself, one systemd instance each.
 picrawler_sensors:
   - ultrasonic
+  - gamepad
 
 # MQTT accounts. Passwords come from vault.yml (see vault.example.yml).
 mosquitto_users:
@@ -21,6 +22,24 @@ mosquitto_users:
     role: sensor
     sensor: ultrasonic
     password: "{{ vault_mqtt_password_sensor_ultrasonic }}"
+  - name: sensor-gamepad
+    role: sensor
+    sensor: gamepad
+    password: "{{ vault_mqtt_password_sensor_gamepad }}"
+  - name: sensor-vision
+    role: sensor
+    sensor: vision
+    password: "{{ vault_mqtt_password_sensor_vision }}"
+  - name: ui
+    role: ui
+    owner: picrawler-web
+    password: "{{ vault_mqtt_password_ui }}"
+
+# Web UI logins. Hash: python3 -m services.web.hashpw (store the hash in vault.yml).
+picrawler_web_users:
+  - name: admin
+    role: admin
+    password_hash: "{{ vault_web_admin_password_hash }}"
 
 # Only localhost by default. Remote sensors need a non-local address,
 # which requires TLS or an explicit opt-in (see roles/mosquitto/defaults).

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PiCrawler admin</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main>
+    <section class="panel">
+      <div class="row">
+        <h2>Bluetooth controllers</h2>
+        <button id="scan" class="primary">Search (20 s)</button>
+        <span class="muted" id="bt-note">Put the controller into pairing mode first.</span>
+      </div>
+      <table>
+        <thead><tr><th>Device</th><th>Address</th><th>State</th><th>Battery</th><th></th></tr></thead>
+        <tbody id="devices"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Gamepad input</h2>
+      <p class="muted">Press buttons to see their names, e.g. for <code>[manual] buttons</code> in arbiter.toml.</p>
+      <div class="tiles">
+        <div class="tile"><div class="label">Stick x / y</div><div class="value" id="pad-xy">–</div></div>
+        <div class="tile"><div class="label">Pressed</div><div class="value" id="pad-buttons">–</div></div>
+        <div class="tile"><div class="label">Last pressed</div><div class="value" id="pad-last">–</div></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <h2>Vision mode</h2>
+        <span class="muted" id="vision-note"></span>
+      </div>
+      <div class="row" id="modes">
+        <button data-mode="detect">detect objects</button>
+        <button data-mode="pose">gestures (pose)</button>
+        <button data-mode="imprint">learn objects (imprint)</button>
+        <button data-mode="off">off (stream only)</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <h2>Services</h2>
+        <button id="refresh">Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>Unit</th><th>State</th><th>Memory</th><th>Since</th><th></th></tr></thead>
+        <tbody id="services"></tbody>
+      </table>
+      <pre class="journal hidden" id="journal"></pre>
+    </section>
+
+    <section class="panel">
+      <h2>System</h2>
+      <p class="muted">Live from /proc, every 2 s. For history over days see docs (node_exporter).</p>
+      <div class="tiles" id="system"></div>
+      <div class="row">
+        <button class="danger" id="reboot">Reboot</button>
+        <button class="danger" id="poweroff">Shut down</button>
+        <span class="muted">The crawler sits down first.</span>
+      </div>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+  <script src="/static/admin.js"></script>
+</body>
+</html>

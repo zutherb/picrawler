@@ -54,6 +54,7 @@ class BodyAdapter:
         if suffix == "cmd/stop":
             stop = schema.stop(payload)
             self.executor.stop(Priority.SAFETY, sit=stop["sit"])
+            self.publish("event/stop", {"reason": stop["reason"], "sit": stop["sit"], "ts": self._wall()}, 1, False)
             return
         if suffix == "cmd/heartbeat":
             self._last_heartbeat = self._mono()

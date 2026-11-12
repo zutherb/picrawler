@@ -15,7 +15,7 @@ picrawler/
   gaits.py        # MoveList: all gaits as frames of 4 [x, y, z] leg tips (no hardware)
   picrawler.py    # Picrawler(robot_hat.Robot): drives the 12 servos
   executor.py     # MotionExecutor: one worker thread, priorities, stop between frames
-services/         # MQTT microservices (body, arbiter, sensor_ultrasonic), see services/README.md
+services/         # MQTT microservices: body, arbiter, sensors, vision, web UI (see services/README.md)
 deploy/ansible/   # provisions the Pi: Mosquitto, venv, systemd units
 tests/            # run off-hardware with a fake robot_hat
 examples/         # motion-only demos (need the real robot)

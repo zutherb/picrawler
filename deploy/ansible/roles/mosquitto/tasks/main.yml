@@ -34,15 +34,16 @@
     path: "{{ mosquitto_client_secret_dir }}"
     state: directory
     owner: root
-    group: "{{ mosquitto_client_secret_owner }}"
-    mode: "0750"
+    group: root
+    # traverse only; each file below is readable by its own service user
+    mode: "0711"
 
 - name: Write client password files
   ansible.builtin.copy:
     content: "{{ item.password }}\n"
     dest: "{{ mosquitto_client_secret_dir }}/{{ item.name }}.pass"
-    owner: "{{ mosquitto_client_secret_owner }}"
-    group: "{{ mosquitto_client_secret_owner }}"
+    owner: "{{ item.owner | default(mosquitto_client_secret_owner) }}"
+    group: "{{ item.owner | default(mosquitto_client_secret_owner) }}"
     mode: "0600"
   loop: "{{ mosquitto_users }}"
   loop_control:

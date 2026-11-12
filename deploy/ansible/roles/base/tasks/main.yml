@@ -17,6 +17,11 @@
   changed_when: true
   notify: Reboot for I2C
 
+- name: Create the apex group for the Coral TPU
+  ansible.builtin.group:
+    name: apex
+    system: true
+
 - name: Create service user
   ansible.builtin.user:
     name: "{{ base_user }}"
@@ -24,7 +29,20 @@
     home: "{{ base_home }}"
     create_home: true
     shell: /usr/sbin/nologin
-    groups: [i2c, gpio]
+    # video: camera, input: gamepad, apex: Coral TPU (see spikes/coral)
+    groups: [i2c, gpio, video, input, apex]
+    append: true
+
+- name: Create web UI user
+  ansible.builtin.user:
+    name: "{{ base_web_user }}"
+    system: true
+    home: "{{ base_home }}-web"
+    create_home: true
+    shell: /usr/sbin/nologin
+    # bluetooth: BlueZ D-Bus, systemd-journal: service logs, video: vcgencmd,
+    # base user group: enter /etc/picrawler
+    groups: [bluetooth, systemd-journal, video, "{{ base_user }}"]
     append: true
 
 - name: Flush handlers so I2C is active before the robot stack is installed

@@ -1,0 +1,23 @@
+// {{ ansible_managed }}
+// Lets the web UI user restart PiCrawler units and power the Pi off/reboot.
+// Nothing else: other units and actions fall through to the default policy.
+polkit.addRule(function (action, subject) {
+    if (subject.user !== "{{ picrawler_web_user }}") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (action.id === "org.freedesktop.systemd1.manage-units") {
+        var unit = action.lookup("unit") || "";
+        var verb = action.lookup("verb") || "";
+        if (/^picrawler-[a-z0-9_-]+(@[a-z0-9_-]+)?\.service$/.test(unit) &&
+                ["restart", "start", "stop"].indexOf(verb) >= 0) {
+            return polkit.Result.YES;
+        }
+    }
+    if (["org.freedesktop.login1.power-off",
+         "org.freedesktop.login1.power-off-multiple-sessions",
+         "org.freedesktop.login1.reboot",
+         "org.freedesktop.login1.reboot-multiple-sessions"].indexOf(action.id) >= 0) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PiCrawler login</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main>
+    <div class="panel login">
+      <h2>PiCrawler</h2>
+      <form method="post" action="/login">
+        <p class="error hidden" id="error"></p>
+        <input name="user" placeholder="User" autocomplete="username" required autofocus>
+        <input name="password" type="password" placeholder="Password" autocomplete="current-password" required>
+        <button class="primary" type="submit">Log in</button>
+      </form>
+    </div>
+  </main>
+  <script src="/static/login.js"></script>
+</body>
+</html>

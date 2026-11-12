@@ -8,6 +8,18 @@
     fail_msg: "Each service/sensor needs a matching entry in mosquitto_users (sensors: sensor-<name>)."
     quiet: true
 
+- name: Check web UI users
+  ansible.builtin.assert:
+    that:
+      - picrawler_web_users | length > 0
+      - picrawler_web_users | rejectattr('password_hash', 'match', '^scrypt\$') | list | length == 0
+      - picrawler_web_users | rejectattr('role', 'in', ['admin', 'viewer']) | list | length == 0
+    fail_msg: >-
+      picrawler_web_users needs at least one user with role admin|viewer and a scrypt
+      password_hash (python -m services.web.hashpw, store it in the vault).
+    quiet: true
+  when: "'web' in picrawler_services | map(attribute='name')"
+
 - name: Create install directory
   ansible.builtin.file:
     path: "{{ picrawler_install_dir }}"
@@ -22,7 +34,8 @@
     state: directory
     owner: root
     group: "{{ picrawler_user }}"
-    mode: "0750"
+    # traverse for the web user too; each file has its own group
+    mode: "0751"
 
 - name: Deploy source
   ansible.builtin.include_tasks: "source_{{ picrawler_source_mode }}.yml"
@@ -67,14 +80,73 @@
     src: "{{ item.src }}"
     dest: "{{ picrawler_config_dir }}/{{ item.dest }}"
     owner: root
-    group: "{{ picrawler_user }}"
+    group: "{{ item.group | default(picrawler_user) }}"
     mode: "0640"
   loop:
     - { src: body.toml.j2, dest: body.toml }
     - { src: arbiter.toml.j2, dest: arbiter.toml }
+    - { src: vision.toml.j2, dest: vision.toml }
+    - { src: web.toml.j2, dest: web.toml, group: "{{ picrawler_web_user }}" }
   loop_control:
     label: "{{ item.dest }}"
   notify: Restart picrawler
+
+- name: Create vision model directory
+  ansible.builtin.file:
+    path: "{{ picrawler_vision_model_dir }}"
+    state: directory
+    owner: "{{ picrawler_user }}"
+    group: "{{ picrawler_user }}"
+    mode: "0755"
+
+- name: Download Coral test model and labels
+  ansible.builtin.get_url:
+    url: "{{ item }}"
+    dest: "{{ picrawler_vision_model_dir }}/{{ item | basename }}"
+    owner: "{{ picrawler_user }}"
+    group: "{{ picrawler_user }}"
+    mode: "0644"
+  loop:
+    - "{{ picrawler_vision_model_url }}"
+    - "{{ picrawler_vision_labels_url }}"
+  when: picrawler_vision_download_models | bool
+
+- name: Create web TLS directory
+  ansible.builtin.file:
+    path: "{{ picrawler_config_dir }}/web-tls"
+    state: directory
+    owner: root
+    group: "{{ picrawler_web_user }}"
+    mode: "0750"
+  when: picrawler_web_tls | bool
+
+- name: Create self-signed certificate for the web UI
+  ansible.builtin.command: >-
+    openssl req -x509 -newkey rsa:2048 -nodes -days 3650
+    -subj "/CN={{ inventory_hostname }}"
+    -addext "subjectAltName=DNS:{{ inventory_hostname }},DNS:{{ ansible_facts['hostname'] | default(inventory_hostname) }}.local"
+    -keyout {{ picrawler_config_dir }}/web-tls/key.pem
+    -out {{ picrawler_config_dir }}/web-tls/cert.pem
+  args:
+    creates: "{{ picrawler_config_dir }}/web-tls/cert.pem"
+  when: picrawler_web_tls | bool
+  notify: Restart picrawler
+
+- name: Make the TLS key readable for the web user
+  ansible.builtin.file:
+    path: "{{ picrawler_config_dir }}/web-tls/key.pem"
+    owner: root
+    group: "{{ picrawler_web_user }}"
+    mode: "0640"
+  when: picrawler_web_tls | bool
+
+- name: Allow the web user to restart PiCrawler units and power off (polkit)
+  ansible.builtin.template:
+    src: polkit-picrawler-web.rules.j2
+    dest: /etc/polkit-1/rules.d/50-picrawler-web.rules
+    owner: root
+    group: root
+    mode: "0644"
 
 - name: Write sensor configs
   ansible.builtin.template:

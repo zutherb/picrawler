@@ -9,6 +9,15 @@ condition = "cm < {{ picrawler_obstacle_stop_cm }}"
 then = { kind = "stop", reason = "obstacle" }
 priority = "safety"
 cooldown_s = 1.0
+# Only while walking forward, so the crawler can still turn or back away.
+when_motion = ["forward"]
+
+# Gamepad control (services.sensor_gamepad). Pauses wander while in use.
+[manual]
+enabled = true
+speed = {{ picrawler_manual_speed }}
+stop_button = "{{ picrawler_manual_stop_button }}"
+buttons = { {% for button, action in picrawler_manual_buttons.items() %}{{ button }} = {{ action | to_json }}{{ ", " if not loop.last else "" }}{% endfor %} }
 
 # Demo goal: walk forward, turn away from obstacles. Off by default.
 [wander]
