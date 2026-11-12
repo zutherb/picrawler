@@ -10,6 +10,8 @@ import statistics
 import time
 import uuid
 
+from . import scan as localmap
+
 HEARTBEAT_S = 0.25
 STALE_S = 1.0
 PENDING_TIMEOUT_S = 5.0
@@ -98,11 +100,12 @@ class Arbiter:
         self.body_online = False
         self.agent_busy = False           # the language model agent is acting
         self.motion = {}                  # last state/motion payload
-        # Order is precedence: manual control, then the agent, then wander.
+        # Order is precedence: manual control, a requested scan, the agent, wander.
         self.manual = Manual(self, cfg.get("manual", {}))
+        self.scan = Scan(self, cfg.get("scan", {}))
         self.agent = AgentGoals(self)
         self.wander = Wander(self, cfg.get("wander", {}))
-        self.behaviors = (self.manual, self.agent, self.wander)
+        self.behaviors = (self.manual, self.scan, self.agent, self.wander)
 
     # --- incoming ---
 
@@ -127,6 +130,10 @@ class Arbiter:
         if suffix == AgentGoals.topic:
             if not retain:
                 self.agent.on_goal(payload)
+            return
+        if suffix == Scan.request_topic:
+            if not retain:
+                self.scan.request(payload)
             return
         if suffix == self.manual.remote_topic:
             if not retain:
@@ -345,6 +352,130 @@ class Manual(Behavior):
         self.send(name, current[2] if current and current[2] else self.speed)
 
 
+class Scan(Behavior):
+    """Look around: turn on the spot and measure after every step.
+
+    Requested on map/scan (web UI). Publishes the growing map, retained,
+    on map/local after every reading (see scan.py). Waits settle_s after
+    each turn so the body stands still, then takes the median of
+    `readings` ultrasonic values. Manual control, a rejected turn or a
+    lost body or sensor aborts it; agent goals and wander wait meanwhile.
+    """
+
+    request_topic = "map/scan"
+    map_topic = "map/local"
+    READING_TIMEOUT_S = 2.0
+
+    def __init__(self, arbiter, cfg):
+        super().__init__(arbiter)
+        self.turns = cfg.get("turns", 16)
+        self.turn_deg = cfg.get("turn_deg", 22.5)        # calibrate: steps for a full turn
+        self.turn = cfg.get("turn", "turn left")
+        self.speed = cfg.get("speed", 60)
+        self.settle_s = cfg.get("settle_s", 0.4)
+        self.readings_needed = cfg.get("readings", 3)
+        self.topic = cfg.get("topic", "sensor/ultrasonic/distance")
+        self.sensor = sensor_of(self.topic)
+        self.grid_cfg = {k: cfg[k] for k in ("cell_cm", "radius_cm", "beam_deg", "max_cm") if k in cfg}
+        self.phase = None                 # None | "measure" | "turn"
+        self.samples = []
+        self.readings = []
+        self.measure_from = 0.0
+        self.sent = False
+        self.requested_by = None
+
+    def active(self):
+        return self.phase is not None
+
+    def request(self, payload):
+        if self.active():
+            return
+        a = self.arbiter
+        user = payload.get("user") if isinstance(payload, dict) else None
+        self.requested_by = user if isinstance(user, str) else None
+        if a.manual.active():
+            self._publish("refused", "manual control active")
+            return
+        if not a.body_online:
+            self._publish("refused", "body offline")
+            return
+        if not a.sensor_fresh(self.sensor):
+            self._publish("refused", "no ultrasonic readings")
+            return
+        self.samples = []
+        self._measure()
+        self._publish("scanning")
+
+    def _measure(self):
+        self.phase = "measure"
+        self.readings = []
+        self.measure_from = self.arbiter._mono() + self.settle_s
+
+    def on_reading(self, suffix, payload):
+        if self.phase != "measure" or suffix != self.topic or self.arbiter._mono() < self.measure_from:
+            return
+        cm = payload.get("cm") if isinstance(payload, dict) else None
+        if isinstance(cm, (int, float)) and not isinstance(cm, bool):
+            self.readings.append(float(cm))
+
+    def on_rejected(self, payload):
+        if self.pending and payload.get("id") == self.pending[0]:
+            self.pending = None
+            self._abort("body refused the turn: %s" % payload.get("reason", "?"))
+
+    def _abort(self, reason):
+        self.phase = None
+        self.pending = None
+        self._publish("aborted", reason)
+
+    def tick(self):
+        if not self.active():
+            return
+        a = self.arbiter
+        now = a._mono()
+        if a.manual.active():
+            self._abort("manual control")
+            return
+        if not a.body_online:
+            self._abort("body offline")
+            return
+        if self.phase == "turn":
+            if not self.sent:
+                if self.ready():
+                    self.send(self.turn, self.speed)
+                    self.sent = True
+            elif self.pending is None and a.body_idle():
+                self._measure()
+            return
+        # measure: the body has to stand still for settle_s first
+        if not a.body_idle():
+            self.measure_from = now + self.settle_s
+            self.readings = []
+            return
+        if len(self.readings) >= self.readings_needed:
+            cm = statistics.median(self.readings)
+        elif now - self.measure_from > self.READING_TIMEOUT_S:
+            if not a.sensor_fresh(self.sensor):
+                self._abort("ultrasonic sensor stopped")
+                return
+            cm = None                     # sensor alive but no echo: nothing in range
+        else:
+            return
+        self.samples.append((round(len(self.samples) * self.turn_deg, 1), None if cm is None else round(cm, 1)))
+        if len(self.samples) >= self.turns:
+            self.phase = None
+            self._publish("done")
+            return
+        self._publish("scanning")
+        self.phase = "turn"
+        self.sent = False
+
+    def _publish(self, status, message=None):
+        payload = localmap.map_payload(self.samples, status, self.turns, self.turn_deg, self.arbiter._wall(),
+                                       message=message, user=self.requested_by, **self.grid_cfg)
+        self.arbiter.publish(self.map_topic, payload, 1, True)
+
+
 class AgentGoals(Behavior):
     """Goals from the language model agent (agent/goal).
 
@@ -395,9 +526,9 @@ class AgentGoals(Behavior):
         if not self.waiting:
             return
         goal, received = self.waiting
-        if self.arbiter.manual.active():
+        if self.arbiter.manual.active() or self.arbiter.scan.active():
             self.waiting = None
-            self.reject(goal["id"], "manual control active")
+            self.reject(goal["id"], "manual control active" if self.arbiter.manual.active() else "scan in progress")
             return
         if self.ready():
             self.waiting = None
@@ -435,6 +566,6 @@ class Wander(Behavior):
         a = self.arbiter
         if not self.enabled or self.distance is None or not a.sensor_fresh(self.sensor):
             return
-        if a.manual.active() or a.agent_busy or a.agent.active() or not self.ready():
+        if a.manual.active() or a.scan.active() or a.agent_busy or a.agent.active() or not self.ready():
             return
         self.send("forward" if self.distance > self.clear_cm else self.turn, self.speed)

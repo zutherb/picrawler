@@ -115,6 +115,12 @@ class StoreAndStateTest(unittest.TestCase):
         self.assertIn(("display", frame), self.pushed)
         self.assertNotIn("display", self.state.snapshot)      # kept out of the status snapshot
 
+    def test_local_map_kept_and_pushed(self):
+        scan = {"status": "done", "samples": [], "grid": [], "ts": 1.0}
+        self.state.on_message("map/local", scan, retain=True)
+        self.assertEqual(self.state.local_map, scan)
+        self.assertIn(("map", scan), self.pushed)
+
     def test_status_snapshot_pushed_once_per_tick(self):
         self.state.on_message("status", {"status": "online"})
         self.state.on_message("sensor/gamepad/status", {"status": "online", "connected": True})

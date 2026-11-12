@@ -42,9 +42,11 @@ change the motion core.
 │ web remote         │          │ Heartbeat    │ state/* │ picrawler.executor       │
 └────────────────────┘          └──────────────┘         │   MotionExecutor thread  │
                                                          │ picrawler.Picrawler      │
- USB mic ─► sensor_speech ─► agent ──── cmd/action, ────►│                          │
-            (whisper.cpp)    (Gemma)    cmd/stop         └──────────────────────────┘
+ USB mic ─► sensor_speech ─► agent ─ agent/goal ─► arbiter     (cmd/stop goes
+            (whisper.cpp)    (Gemma)                            straight to the body)
                                └─► agent/reply ─► voice (Piper)
+
+ web ─ map/scan ─► arbiter (Scan: turn + measure) ─ map/local ─► web (Surroundings map)
 
  Observers: web (UI, admin, MQTT debug, OLED mirror) · display (OLED, works without MQTT)
  Clients:   browser, iPhone/iPad app (same HTTP API), found via avahi or the robot's hotspot
@@ -58,15 +60,15 @@ connect to the same broker with the `sensor` role.
 |---|---|---|---|
 | `picrawler` (core) | this repo | Kinematics, gaits, servos | import MQTT, start threads |
 | `picrawler.executor` | this repo | Execute commands one after another, interruptible between frames | network access |
-| `services.body` | own process | MQTT ↔ executor, validation, watchdog, status, battery protection | drive servos bypassing the executor |
-| `services.arbiter` | own process | Sensor facts → commands by priority, heartbeat, Manual (gamepad, web remote), Wander | pass through `cmd/*` from sensors |
+| `services.body` | own process | MQTT ↔ executor, validation, watchdog, status, battery protection, obstacle interlock | drive servos bypassing the executor |
+| `services.arbiter` | own process | Sensor facts and requests → commands by priority, heartbeat; behaviours Manual (gamepad, web remote) > Scan > agent goals > Wander | pass through `cmd/*` from sensors |
 | `services.sensor_ultrasonic` | own process | Publish distances | publish under `cmd/*` |
 | `services.sensor_gamepad` | own process | Read any evdev controller, publish normalized inputs (section 8.8) | publish under `cmd/*` |
 | Other sensor nodes | anywhere | Publish measurements | publish under `cmd/*` |
 | `services.vision` | Pi with camera + Coral | Camera, MJPEG stream (127.0.0.1 only), inference on the TPU, publish detections (section 7) | decide behaviour, send commands |
 | `services.web` | own process | Login, live page, stream proxy, object log, remote, emergency stop, admin, MQTT debug, OLED mirror (section 8) | drive servos or camera directly |
 | `services.sensor_speech` | own process | Microphone, VAD, whisper.cpp client, publish transcripts (section 8a) | send commands |
-| `services.agent` | own process | Wake word, stop fast path, language model with tools; sends goals as `cmd/action` / `cmd/stop` (section 8a) | bypass the arbiter's reflexes or the body's lockout |
+| `services.agent` | own process | Wake word, stop fast path, language model with tools; asks the arbiter for movement (`agent/goal`), may stop (`cmd/stop`) (section 8a) | send `cmd/action` |
 | `services.voice` | own process | Speak replies with Piper | — |
 | `services.display` | own process | OLED status from `/proc` and `/sys`, battery from MQTT, publish `display/frame` (section 12) | depend on MQTT for its basic picture |
 | `netwatch` | Ansible `network` role | Wi-Fi hotspot fallback, state in `/run/picrawler/network.json` (section 12) | — |
@@ -81,9 +83,10 @@ picrawler/
   picrawler.py        # Picrawler, iter_action()
   executor.py         # MotionExecutor
 services/             # one process per service: python -m services.<name> --config …
-  common/             # config.py, mqtt.py (paho wrapper), schema.py (payload validation), metrics.py
+  common/             # config.py, mqtt.py (paho wrapper), schema.py (payload validation), metrics.py,
+                      # topics.py (broker ACL, single source)
   body/               # adapter.py (BodyAdapter), battery.py, __main__.py
-  arbiter/            # arbiter.py (rules, Manual, Wander), __main__.py
+  arbiter/            # arbiter.py (rules, Manual, Scan, AgentGoals, Wander), scan.py (local map), __main__.py
   sensor_ultrasonic/  # __main__.py
   sensor_gamepad/     # gamepad.py (normalization), __main__.py (evdev), section 8.8
   vision/             # camera + Coral, see section 7
@@ -198,10 +201,10 @@ JSON in UTF-8 and contain `ts` (Unix time in seconds, float).
 |---|---|---|---|
 | `sensor/<sensor>/<measurement>` | Sensor → Arbiter | 0 | no |
 | `sensor/<sensor>/status` | Sensor → | 1 | yes (LWT `offline`) |
-| `cmd/action` | Arbiter → Body | 1 | **never** |
+| `cmd/action` | Arbiter → Body (the only writer) | 1 | **never** |
 | `cmd/frame` | Arbiter → Body | 1 | **never** |
-| `cmd/stop` | any authorized party → Body | 1 | **never** |
-| `cmd/heartbeat` | Arbiter (or UI) → Body | 0 | no |
+| `cmd/stop` | Arbiter, UI, agent → Body | 1 | **never** |
+| `cmd/heartbeat` | Arbiter → Body | 0 | no |
 | `state/motion` | Body → | 1 | yes |
 | `state/legs` | Body → | 0 | yes |
 | `status` | Body → | 1 | yes (LWT `offline`) |
@@ -216,6 +219,16 @@ JSON in UTF-8 and contain `ts` (Unix time in seconds, float).
 | `web/status` | web → | 1 | yes (LWT `offline`) |
 | `display/frame` | display → web | 0 | yes (`{"w", "h", "data"}`, 1-bit pixels base64, only when the picture changes) |
 | `remote/state` | web → arbiter | 0 | no (`{"x", "y", "speed"?, "action"?, "user"}`, while a remote control is held) |
+| `agent/goal` | agent → arbiter | 1 | no (`{"id", "name", "steps", "speed"}`; started as `cmd/action` with the same id) |
+| `arbiter/rejected` | arbiter → agent | 1 | no (`{"id", "reason"}`: manual control active, scan in progress, body busy) |
+| `map/scan` | web → arbiter | 1 | no (`{"id", "user"}`: look around, section 6a) |
+| `map/local` | arbiter → web | 1 | yes (scan progress and result, section 6a) |
+
+Who may publish and subscribe what is defined once in
+`services/common/topics.py`. The Mosquitto role reads the generated
+`deploy/ansible/roles/mosquitto/vars/main.yml`; `tests/test_topics.py`
+fails if that file is stale or if a service publishes or subscribes outside
+its role (found by reading the code).
 
 The body only accepts GOAL commands if a `cmd/heartbeat` arrived in the last
 second. Otherwise the watchdog would abort them immediately anyway.
@@ -277,13 +290,15 @@ with a reason via `event/rejected`. Nothing is executed in that case.
 | Exception in the executor | report `error`, then stop |
 | Process end (SIGINT/SIGTERM) | `shutdown(sit=True)`, `status` = `offline` |
 | Start | `status` = `online`, state `idle`, **no** automatic movement |
+| Obstacle ahead (body interlock) | below `[interlock] min_cm` (default 15 cm, median of 3 fresh readings) a running `forward` is stopped (`event/stop`, reason "body interlock") and new ones are refused. Works without the arbiter; stale or missing readings block nothing |
 
 Broker:
 
 - Username and password mandatory, TLS recommended as soon as devices other than
   localhost are involved.
-- ACLs: sensor users may only write `crawler/+/sensor/<own sensor>/#`.
-  Only the arbiter and the user interface may write `crawler/+/cmd/#`.
+- ACLs (`services/common/topics.py`): sensor users may only write
+  `sensor/<own sensor>/#`. Only the arbiter may write `cmd/action` and
+  `cmd/heartbeat`; UI and agent may additionally write `cmd/stop`.
   Only the body service may write `state/#`, `status` and `event/#`.
 
 ## 6. Arbiter
@@ -305,6 +320,45 @@ Measurements are debounced, e.g. by a median over the last 3 values,
 so that a single outlier does not trigger a stop. If a sensor is `offline`,
 its rules are considered "unknown", and GOAL commands that depend on it
 are rejected.
+
+Behaviours, in order of precedence (each keeps at most one command in
+flight and only sends while the body is idle):
+
+1. **Manual**: gamepad and web remote (dead man after 1 s).
+2. **Scan**: look around on request (section 6a).
+3. **Agent goals**: `agent/goal` from the agent, started as `cmd/action`
+   with the agent's id. Refused on `arbiter/rejected` while Manual or a
+   scan is active, or if the body was not free within 5 s.
+4. **Wander** (optional demo): pauses while anything above is active or the
+   agent is busy.
+
+## 6a. Local map (look around)
+
+A robot-centric 2D map from the ultrasonic sensor, without new hardware.
+On `map/scan` (button "Scan" on the Remote page) the arbiter's Scan
+behaviour turns on the spot (`[scan] turns` = 16 headings) and, after each
+turn, waits `settle_s` for the body to stand still and takes the median of
+3 readings. No echo within 2 s while the sensor is alive counts as free.
+`services/arbiter/scan.py` turns the readings into an occupancy grid
+(5 cm cells, 1.5 m radius, 15° beam: free up to the echo, occupied at the
+echo, unknown elsewhere) and the arbiter publishes it, retained, on
+`map/local` after every reading:
+
+```json
+{"status": "scanning|done|aborted|refused", "message": null, "progress": [5, 16],
+ "samples": [{"heading_deg": 0, "cm": 82.0}, …], "grid": ["??..#", …],
+ "cell_cm": 5, "radius_cm": 150, "nearest": [90, 31.0], "clearest_deg": 180, "user": "admin", "ts": …}
+```
+
+Headings are degrees counter-clockwise from where the crawler faced at the
+start. Manual control, a rejected turn or a lost body/sensor aborts the
+scan. Limits:
+
+- `turn_deg` (default 22.5) is an estimate: count the "turn left" steps
+  for one full turn on your floor and set `turn_deg = 360 / steps`.
+- The map is only valid where it was made. Legged steps slip, so there is
+  no position to merge scans into a room map. That needs a pose source
+  (AprilTags with the camera, or a 2D lidar plus IMU); see section 13.
 
 ## 7. Vision service (camera + Coral TPU)
 
@@ -602,7 +656,8 @@ an optional stronger model on a machine in the home network is used when it
 is reachable. No internet.
 
 ```
-USB mic ─► sensor_speech ─(sensor/speech/text)─► agent ─(cmd/action, cmd/stop)─► body
+USB mic ─► sensor_speech ─(sensor/speech/text)─► agent ─(agent/goal)─► arbiter ─(cmd/action)─► body
+                                                  │ └──(cmd/stop, directly)─────────────────► body
            VAD + whisper.cpp                      │  Gemma 4 E2B (LiteRT-LM)
                                                   │  tools: walk, turn, do_action,
 web UI ──────────(agent/ask)──────────────────────┤         stop, look, distance, search
@@ -631,9 +686,11 @@ Decisions:
 - **Stop never waits for the model:** "stopp", "halt" etc. trigger
   `cmd/stop` directly and drop queued requests.
 - **Tools do the loops, the model decides:** `search` turns step by step
-  until the label is detected; `walk forward` refuses below 20 cm. Commands
-  are plain goals, so the arbiter's obstacle stop and the body's lockout
-  stay in charge; while the agent is busy, wander pauses.
+  until the label is detected; `walk forward` refuses below 20 cm. Movement
+  goes to the arbiter as `agent/goal`, so manual control, the obstacle stop,
+  the body's interlock and lockout stay in charge; while the agent is busy,
+  wander pauses. A refused goal comes back on `arbiter/rejected` and the
+  tool tells the model why.
 - **CPU budget:** agent and whisper run with `Nice=10`, the agent with
   `CPUQuota=300%`, leaving a core for body, vision and the stream. Active
   cooling is required.
@@ -803,5 +860,10 @@ actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wa
 - Does the SteelSeries Nimbus pair with BlueZ and show up in evdev? If not,
   any other Bluetooth pad works with the same code (section 8.8).
 - How long does a model switch (`detect` ↔ `pose`) take on the TPU?
+- How many degrees does one "turn left" step turn on a real floor
+  (`[scan] turn_deg`)?
+- Room map: AprilTags with the existing camera for the pose, or a 2D
+  lidar (e.g. LD06) plus IMU (e.g. BNO085)? Either feeds a `mapper` service
+  without changes to body or arbiter.
 - Do the HatDrive! AI and the Robot HAT fit together mechanically, and how
   much does the NVMe add to the power draw on battery (section 12)?

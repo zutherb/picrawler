@@ -27,7 +27,7 @@ picrawler/
 services/         # python -m services.<name> --config x.toml [--fake]; needs Python 3.11 (tomllib)
   common/         # config, paho wrapper (Bus), schema validation
   body/           # BodyAdapter: MQTT <-> executor, watchdog
-  arbiter/        # Arbiter: rules, heartbeat, Manual (gamepad), Wander
+  arbiter/        # Arbiter: rules, heartbeat, Manual > Scan (scan.py, local map) > AgentGoals > Wander
   sensor_ultrasonic/, sensor_gamepad/
   vision/         # camera, MJPEG on 127.0.0.1:8081, Edge TPU detector
   web/            # aiohttp UI: login, SSE, object log, admin; static/ has no inline JS (CSP)
@@ -48,7 +48,8 @@ examples/         # motion demos, must run on the robot with sudo
 - Service logic (`BodyAdapter`, `Arbiter`) is transport-agnostic: `on_message(suffix, payload, retain)`, `tick()`, injected `publish(suffix, payload, qos, retain)` and clocks. Keep paho inside `services/common/mqtt.py` so tests need no broker.
 - `cmd/stop` must never be rejected. GOAL commands need a recent `cmd/heartbeat`.
 - Agent tools return English text for the model; spoken fixed replies come from a language table. German command words in `KeywordBrain` are data, keep them.
-- MQTT topics/ACLs are mirrored in `deploy/ansible/roles/mosquitto/templates/picrawler.acl.j2`; update both together.
+- Broker ACLs live in `services/common/topics.py`; regenerate `deploy/ansible/roles/mosquitto/vars/main.yml` with `python -m services.common.topics > …`. `tests/test_topics.py` checks every service's publish/subscribe calls against it.
+- Only the arbiter writes `cmd/action`. The agent sends `agent/goal`; the body has its own obstacle interlock.
 
 ## Calibration data
 

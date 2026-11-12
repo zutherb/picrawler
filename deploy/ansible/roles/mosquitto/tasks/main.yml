@@ -3,7 +3,7 @@
   ansible.builtin.assert:
     that:
       - mosquitto_users | length > 0
-      - mosquitto_users | map(attribute='role') | difference(['body', 'arbiter', 'sensor', 'ui', 'agent', 'voice', 'display']) | length == 0
+      - mosquitto_users | map(attribute='role') | difference(mosquitto_acl.keys() | list) | length == 0
       - mosquitto_users | selectattr('role', 'equalto', 'sensor') | rejectattr('sensor', 'defined') | list | length == 0
       - mosquitto_listen_address in ['127.0.0.1', 'localhost', '::1'] or (mosquitto_allow_plaintext_remote | bool)
     fail_msg: >-

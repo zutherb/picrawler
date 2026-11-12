@@ -6,17 +6,17 @@ this (units from `deploy/ansible`). Background: `docs/target-architecture.md`.
 
 | Service | Job | MQTT user |
 |---|---|---|
-| `services.body` | the only process with access to the servos: validates commands, `MotionExecutor`, watchdog | `body` |
-| `services.arbiter` | sensor readings → commands by rules, heartbeat, gamepad control, optional "wander" | `arbiter` |
+| `services.body` | the only process with access to the servos: validates commands, `MotionExecutor`, watchdog, obstacle interlock | `body` |
+| `services.arbiter` | sensor readings and requests → commands: rules, heartbeat, gamepad/remote, look-around scan (local map), agent goals, optional "wander" | `arbiter` |
 | `services.sensor_ultrasonic` | measures and publishes the distance | `sensor-ultrasonic` |
 | `services.sensor_gamepad` | reads any Bluetooth/USB gamepad via evdev, publishes stick and buttons | `sensor-gamepad` |
 | `services.vision` | camera, MJPEG stream on 127.0.0.1:8081, object detection on the Coral | `sensor-vision` |
 | `services.web` | login, live video with boxes, object log, emergency stop, agent input, admin (Bluetooth, vision mode, services, metrics), MQTT debug page | `ui` |
 | `services.sensor_speech` | USB microphone, voice activity detection, whisper.cpp → text | `sensor-speech` |
-| `services.agent` | offline language model (Gemma 4 E2B via LiteRT-LM) with robot tools; keyword parser as fallback | `agent` |
+| `services.agent` | offline language model (Gemma 4 E2B via LiteRT-LM) with robot tools; asks the arbiter for movement; keyword parser as fallback | `agent` |
 | `services.voice` | speaks the agent's replies with Piper | `voice` |
 | `services.display` | 128x64 I2C OLED: Wi-Fi, IP/temperature, Bluetooth, bars for battery, CPU, RAM, SD, NVMe | `display` (battery only) |
-| `services.common` | config, MQTT connection, message validation | – |
+| `services.common` | config, MQTT connection, message validation, broker ACL (`topics.py`) | – |
 
 The logic of each service lives in a class without networking
 (`BodyAdapter`, `Arbiter`); `__main__.py` only connects it to MQTT. That is
@@ -155,5 +155,11 @@ they run alone. Requires `paho-mqtt>=2`, plus `aiohttp` for the web UI.
 - `SIGTERM`/`Ctrl+C` → sit down, `status` = `offline`.
 - Battery below 6.6 V for 20 s → sit down, motion refused until charged.
 - The obstacle stop only fires while walking forward (`when_motion`), so the
-  crawler can turn or back away from a wall.
-- The gamepad has precedence over wander, never over the safety stop.
+  crawler can turn or back away from a wall. The body has its own interlock
+  for the same case (`[interlock]` in body.toml), so this also holds when
+  the arbiter is down.
+- Precedence of goal sources in the arbiter: gamepad/remote > scan > agent >
+  wander. None of them beats the safety stop.
+- Broker rights per service are defined in `services/common/topics.py`.
+  After changing it, regenerate the Ansible vars:
+  `python -m services.common.topics > deploy/ansible/roles/mosquitto/vars/main.yml`.

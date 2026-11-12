@@ -8,6 +8,7 @@ UI can be developed on a laptop.
 """
 import asyncio
 import ipaddress
+import math
 import random
 import signal
 import ssl
@@ -61,6 +62,8 @@ class FakeFeed:
             self.inject("event/stop", {"reason": payload.get("reason"), "sit": payload.get("sit"), "ts": time.time()})
         elif suffix == "remote/state":
             self.remote_step(payload)
+        elif suffix == "map/scan":
+            asyncio.get_running_loop().create_task(self.fake_scan(payload.get("user")))
         elif suffix == "agent/ask":
             self.inject("agent/reply", {"text": "(fake) Okay: %s" % payload.get("text"), "request": payload.get("text"),
                                         "source": payload.get("user"), "brain": "fake", "seconds": 0.1,
@@ -81,6 +84,38 @@ class FakeFeed:
             self.inject("state/motion", {"status": "running", "name": name, "priority": "goal", "queue_len": 0})
             asyncio.get_running_loop().call_later(
                 0.6, self.inject, "state/motion", {"status": "idle", "name": name, "priority": "goal", "queue_len": 0})
+
+    async def fake_scan(self, user, turns=16, turn_deg=22.5):
+        """Pretend the arbiter scanned a room with a box in it (mock only)."""
+        from services.arbiter.scan import map_payload
+        walls = [((-90, -70), (-90, 140)), ((-90, 140), (120, 140)), ((120, 140), (120, -70)),
+                 ((120, -70), (-90, -70)), ((30, 50), (60, 50)), ((30, 50), (30, 80)),
+                 ((30, 80), (60, 80)), ((60, 50), (60, 80))]
+
+        def distance(heading):
+            # ray from the robot; heading 0 = +y (ahead), positive = to the left (-x)
+            dx, dy = -math.sin(math.radians(heading)), math.cos(math.radians(heading))
+            best = None
+            for (x1, y1), (x2, y2) in walls:
+                ex, ey = x2 - x1, y2 - y1
+                den = dx * ey - dy * ex
+                if abs(den) < 1e-9:
+                    continue
+                t = (x1 * ey - y1 * ex) / den
+                u = (x1 * dy - y1 * dx) / den
+                if t > 0 and 0 <= u <= 1:
+                    best = t if best is None else min(best, t)
+            return None if best is None or best > 200 else round(best + random.uniform(-2, 2), 1)
+
+        samples = []
+        self.inject("map/local", map_payload(samples, "scanning", turns, turn_deg, time.time(), user=user), True)
+        for i in range(turns):
+            self.inject("state/motion", {"status": "running", "name": "turn left", "priority": "goal", "queue_len": 0})
+            await asyncio.sleep(0.5)
+            self.inject("state/motion", {"status": "idle", "name": "turn left", "priority": "goal", "queue_len": 0})
+            samples.append((i * turn_deg, distance(i * turn_deg)))
+            status = "done" if i == turns - 1 else "scanning"
+            self.inject("map/local", map_payload(samples, status, turns, turn_deg, time.time(), user=user), True)
 
     def inject(self, suffix, payload, retain=False):
         self.monitor.record(suffix, encode(payload).encode(), retain, 0, time.time())

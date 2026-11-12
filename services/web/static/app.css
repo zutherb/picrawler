@@ -317,6 +317,7 @@ body.login-page::after {
 .tree .node.selected { background: var(--hover); box-shadow: inset 2px 0 0 var(--accent-1); }
 .tree .node.retained .name { text-decoration: underline dotted; text-underline-offset: 3px; }
 .tree .toggle { display: inline-block; width: 12px; color: var(--muted); }
+.tag.warn { border-color: var(--warn); background: rgba(254, 188, 46, 0.12); }
 .tree .node.flash .tag { animation: flash 0.6s ease-out; }
 @keyframes flash { from { background: var(--accent-1); color: #101018; } to { background: rgba(48, 213, 192, 0.10); } }
 #filter { flex: 1; min-width: 200px; }
@@ -372,6 +373,17 @@ pre.payload.compact { max-height: none; }
 @media (max-width: 900px) { .remote { grid-template-columns: 1fr; } }
 .remote-controls { display: grid; gap: 18px; justify-items: center; }
 .remote-controls > .row { justify-self: stretch; }
+.map-panel { display: grid; gap: 12px; }
+.local-map {
+  width: 100%; max-width: 480px; aspect-ratio: 1; justify-self: center;
+  border-radius: 12px; border: 1px solid var(--border); background: var(--bg-deep-2);
+}
+.map-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.map-legend { display: flex; flex-wrap: wrap; gap: 14px; }
+.map-legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.swatch.free { background: rgba(48, 213, 192, 0.35); }
+.swatch.occupied { background: var(--warn); }
+.swatch.unknown { background: var(--bg-deep-2); border: 1px solid var(--border-strong); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .chip {
   display: inline-flex; align-items: center; font-family: var(--font-mono); font-size: 0.75rem;

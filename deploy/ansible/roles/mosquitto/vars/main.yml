@@ -1,0 +1,55 @@
+---
+# Generated from services/common/topics.py, do not edit. Regenerate with:
+#   python -m services.common.topics > deploy/ansible/roles/mosquitto/vars/main.yml
+mosquitto_acl:
+  body:
+    - {access: read, topic: "cmd/#"}
+    - {access: read, topic: "sensor/ultrasonic/distance"}
+    - {access: write, topic: "state/#"}
+    - {access: write, topic: "status"}
+    - {access: write, topic: "event/#"}
+  arbiter:
+    - {access: read, topic: "sensor/#"}
+    - {access: read, topic: "state/#"}
+    - {access: read, topic: "status"}
+    - {access: read, topic: "event/#"}
+    - {access: read, topic: "agent/status"}
+    - {access: read, topic: "agent/goal"}
+    - {access: read, topic: "remote/state"}
+    - {access: read, topic: "map/scan"}
+    - {access: write, topic: "cmd/#"}
+    - {access: write, topic: "vision/mode"}
+    - {access: write, topic: "arbiter/#"}
+    - {access: write, topic: "map/local"}
+  sensor:
+    - {access: write, topic: "sensor/{sensor}/#"}
+  ui:
+    - {access: read, topic: "#"}
+    - {access: write, topic: "cmd/stop"}
+    - {access: write, topic: "vision/mode"}
+    - {access: write, topic: "web/status"}
+    - {access: write, topic: "agent/ask"}
+    - {access: write, topic: "remote/state"}
+    - {access: write, topic: "map/scan"}
+  agent:
+    - {access: read, topic: "status"}
+    - {access: read, topic: "arbiter/status"}
+    - {access: read, topic: "arbiter/rejected"}
+    - {access: read, topic: "state/motion"}
+    - {access: read, topic: "event/#"}
+    - {access: read, topic: "sensor/#"}
+    - {access: read, topic: "agent/ask"}
+    - {access: write, topic: "cmd/stop"}
+    - {access: write, topic: "agent/#"}
+  voice:
+    - {access: read, topic: "agent/reply"}
+    - {access: write, topic: "voice/#"}
+  display:
+    - {access: read, topic: "state/battery"}
+    - {access: write, topic: "display/status"}
+    - {access: write, topic: "display/frame"}
+mosquitto_acl_sensor:
+  vision:
+    - {access: read, topic: "vision/mode"}
+  speech:
+    - {access: read, topic: "voice/speaking"}

@@ -23,6 +23,7 @@ class LiveState:
         }
         self.vision_mode = "detect"
         self.display_frame = None         # latest OLED picture (display/frame)
+        self.local_map = None             # latest scan (map/local)
         self._dirty = True
         self._last_prune = None
 
@@ -46,6 +47,9 @@ class LiveState:
         elif suffix == "display/frame":
             self.display_frame = payload
             self.push("display", payload)
+        elif suffix == "map/local":
+            self.local_map = payload
+            self.push("map", payload)
         elif suffix == "agent/reply" and not retain:
             self._log_agent(payload)
         elif suffix == "sensor/vision/status":

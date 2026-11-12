@@ -1,5 +1,6 @@
 import unittest
 
+from services.arbiter import scan as localmap
 from services.arbiter.arbiter import Arbiter, parse_condition
 
 NOW = 1_762_900_000.0
@@ -229,6 +230,110 @@ class AgentGoalTest(ArbiterTestBase):
         self.distance(80)
         self.arbiter.tick()
         self.assertEqual(len(self.topics("cmd/action")), 2)   # wander resumes
+
+
+class ScanTest(ArbiterTestBase):
+
+    def setUp(self):
+        self.make({"rule": [OBSTACLE_RULE], "wander": {"enabled": True},
+                   "scan": {"turns": 4, "turn_deg": 90, "settle_s": 0.4, "readings": 3}})
+        self.arbiter.on_message("status", {"status": "online"})
+        self.arbiter.on_message("state/motion", {"status": "idle", "queue_len": 0})
+        self.distance(100)
+
+    def maps(self):
+        return [m[1] for m in self.topics("map/local")]
+
+    def turns(self):
+        return [m[1] for m in self.topics("cmd/action")]
+
+    def measure(self, cm):
+        self.mono.t += 0.5                            # settled
+        for _ in range(3):
+            self.distance(cm)
+        self.arbiter.tick()
+
+    def finish_turn(self):
+        self.arbiter.tick()                           # sends the turn
+        turn = self.turns()[-1]
+        self.arbiter.on_message("state/motion", {"status": "running", "command_id": turn["id"], "queue_len": 0})
+        self.arbiter.on_message("state/motion", {"status": "idle", "command_id": turn["id"], "queue_len": 0})
+        self.arbiter.tick()                           # back to measuring
+
+    def test_full_sweep(self):
+        self.arbiter.on_message("map/scan", {"id": "s1", "user": "admin", "ts": NOW})
+        self.assertEqual(self.maps()[-1]["status"], "scanning")
+        for i, cm in enumerate((80, 30, 120, 50)):
+            self.measure(cm)
+            if i < 3:
+                self.finish_turn()
+        result = self.maps()[-1]
+        self.assertEqual(result["status"], "done")
+        self.assertEqual([(s["heading_deg"], s["cm"]) for s in result["samples"]],
+                         [(0, 80), (90, 30), (180, 120), (270, 50)])
+        self.assertEqual(result["nearest"], (90, 30))
+        self.assertEqual(result["clearest_deg"], 180)
+        self.assertEqual([t["name"] for t in self.turns()][:3], ["turn left"] * 3)   # then wander resumes
+        self.assertEqual(len(result["grid"]), 60)
+        self.assertEqual(self.topics("map/local")[-1][2:], (1, True))   # retained
+
+    def test_waits_for_the_body_to_settle(self):
+        self.arbiter.on_message("map/scan", {"id": "s1"})
+        for _ in range(3):
+            self.distance(40)                         # too early, body may still sway
+        self.arbiter.tick()
+        self.assertEqual(self.maps()[-1]["progress"], [0, 4])
+        self.measure(40)
+        self.assertEqual(self.maps()[-1]["progress"], [1, 4])
+
+    def test_no_echo_counts_as_free(self):
+        self.arbiter.on_message("map/scan", {"id": "s1"})
+        self.mono.t += 0.5
+        self.arbiter.tick()
+        self.mono.t += 1.5
+        self.distance(100)                            # keeps the sensor fresh, too few readings
+        self.mono.t += 0.7
+        self.arbiter.tick()
+        self.assertEqual(self.maps()[-1]["samples"], [{"heading_deg": 0, "cm": None}])
+
+    def test_manual_control_aborts_and_others_wait(self):
+        self.arbiter.on_message("map/scan", {"id": "s1"})
+        self.arbiter.on_message("agent/goal", {"id": "g1", "name": "forward", "ts": NOW})
+        self.arbiter.tick()
+        self.assertEqual([m[1]["reason"] for m in self.topics("arbiter/rejected")], ["scan in progress"])
+        self.assertEqual(self.turns(), [])            # wander waits too
+        self.arbiter.on_message("remote/state", {"x": 0, "y": -1})
+        self.arbiter.tick()
+        self.assertEqual((self.maps()[-1]["status"], self.maps()[-1]["message"]), ("aborted", "manual control"))
+
+    def test_refused_without_sensor_or_body(self):
+        self.mono.t += 2
+        self.arbiter.on_message("map/scan", {"id": "s1"})
+        self.assertEqual((self.maps()[-1]["status"], self.maps()[-1]["message"]),
+                         ("refused", "no ultrasonic readings"))
+
+    def test_rejected_turn_aborts(self):
+        self.arbiter.on_message("map/scan", {"id": "s1"})
+        self.measure(60)
+        self.arbiter.tick()
+        self.arbiter.on_message("event/rejected", {"id": self.turns()[-1]["id"], "reason": "battery critical"})
+        self.assertEqual(self.maps()[-1]["message"], "body refused the turn: battery critical")
+        self.assertFalse(self.arbiter.scan.active())
+
+
+class OccupancyTest(unittest.TestCase):
+
+    def test_echo_marks_free_then_occupied(self):
+        grid = localmap.occupancy([(0, 50)], cell_cm=10, radius_cm=100, beam_deg=0.1)
+        column = "".join(row[10] for row in grid)     # straight ahead, from the far end to the robot
+        self.assertEqual(column[:5], "?????")
+        self.assertEqual(column[5], "#")
+        self.assertEqual(column[6:10], "....")
+
+    def test_no_echo_is_free_to_the_edge(self):
+        grid = localmap.occupancy([(90, None)], cell_cm=10, radius_cm=100, beam_deg=0.1, max_cm=200)
+        self.assertEqual(grid[9][:10], "." * 10)      # to the left
+        self.assertEqual(grid[9][11:], "?" * 9)
 
 
 if __name__ == "__main__":

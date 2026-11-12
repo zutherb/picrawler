@@ -159,3 +159,94 @@ PC.init("remote").then(() => {
   startVideo();
   requestAnimationFrame(loop);
 });
+
+// --- surroundings (map/local from the arbiter's scan) ---
+
+const mapCanvas = document.getElementById("map");
+let lastMap = null;
+
+function drawMap(m) {
+  const ctx = mapCanvas.getContext("2d");
+  const size = mapCanvas.width;
+  const css = getComputedStyle(document.documentElement);
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = css.getPropertyValue("--bg-deep-2");
+  ctx.fillRect(0, 0, size, size);
+  const radius = (m && m.radius_cm) || 150;
+  const scale = size / (2 * radius);              // px per cm
+  const center = size / 2;
+  if (m && m.grid && m.grid.length) {
+    const n = m.grid.length;
+    const cell = size / n;
+    m.grid.forEach((row, r) => {
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] === ".") ctx.fillStyle = "rgba(48, 213, 192, 0.28)";
+        else if (row[c] === "#") ctx.fillStyle = css.getPropertyValue("--warn");
+        else continue;
+        ctx.fillRect(c * cell, r * cell, Math.ceil(cell), Math.ceil(cell));
+      }
+    });
+  }
+  // range rings
+  ctx.strokeStyle = "rgba(244, 240, 255, 0.12)";
+  ctx.fillStyle = "rgba(244, 240, 255, 0.45)";
+  ctx.font = "11px " + css.getPropertyValue("--font-mono");
+  for (let cm = 50; cm <= radius; cm += 50) {
+    ctx.beginPath();
+    ctx.arc(center, center, cm * scale, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.fillText(cm + " cm", center + 4, center - cm * scale + 12);
+  }
+  // measurement rays: heading 0 is up, positive turns left (counter-clockwise)
+  for (const s of (m && m.samples) || []) {
+    const a = s.heading_deg * Math.PI / 180;
+    const d = Math.min(s.cm == null ? radius : s.cm, radius) * scale;
+    ctx.strokeStyle = s.cm == null ? "rgba(244, 240, 255, 0.15)" : "rgba(160, 243, 227, 0.55)";
+    ctx.beginPath();
+    ctx.moveTo(center, center);
+    ctx.lineTo(center - Math.sin(a) * d, center - Math.cos(a) * d);
+    ctx.stroke();
+  }
+  // the crawler, facing where it faced when the scan started
+  ctx.fillStyle = css.getPropertyValue("--accent-1");
+  ctx.beginPath();
+  ctx.moveTo(center, center - 11);
+  ctx.lineTo(center - 8, center + 8);
+  ctx.lineTo(center + 8, center + 8);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function showMap(m) {
+  lastMap = m;
+  drawMap(m);
+  const status = document.getElementById("map-status");
+  const info = document.getElementById("map-info");
+  const button = document.getElementById("map-scan");
+  const [done, total] = m.progress || [0, 0];
+  const scanning = m.status === "scanning";
+  status.textContent = scanning ? `scanning ${done}/${total}` : m.status;
+  status.classList.toggle("warn", m.status === "aborted" || m.status === "refused");
+  button.disabled = scanning;
+  if (m.message) {
+    info.textContent = m.message;
+  } else if (m.status === "done") {
+    const parts = [new Date(m.ts * 1000).toLocaleTimeString()];
+    if (m.nearest) parts.push(`nearest ${Math.round(m.nearest[1])} cm at ${Math.round(m.nearest[0])}°`);
+    if (m.clearest_deg != null) parts.push(`most room at ${Math.round(m.clearest_deg)}°`);
+    info.textContent = parts.join(" · ") + ". Only valid where it was scanned.";
+  } else if (scanning) {
+    info.textContent = "Turning and measuring…";
+  }
+}
+
+PC.on("map", showMap);
+document.getElementById("map-scan").addEventListener("click", async () => {
+  try {
+    await PC.api("POST", "/api/map/scan", {});
+  } catch (err) {
+    PC.toast("Scan: " + err.message, true);
+  }
+});
+drawMap(null);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => drawMap(lastMap));

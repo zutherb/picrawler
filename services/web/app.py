@@ -105,6 +105,7 @@ class WebApp:
         r.add_post("/api/vision/mode", self.vision_mode)
         r.add_post("/api/agent/ask", self.agent_ask)
         r.add_post("/api/remote", self.remote)
+        r.add_post("/api/map/scan", self.map_scan)
         r.add_get("/api/bluetooth", self.bt_devices)
         r.add_post("/api/bluetooth/scan", self.bt_scan)
         r.add_post("/api/bluetooth/{action}", self.bt_action)
@@ -198,6 +199,8 @@ class WebApp:
     async def events(self, request):
         recent = list(reversed(self.store.query(limit=30)))
         initial = [("status", self.state.snapshot), ("history", recent)]
+        if self.state.local_map is not None:
+            initial.append(("map", self.state.local_map))
         return await self.sse(request, self.hub, initial)
 
     async def sse(self, request, hub, initial=(), queue_size=200):
@@ -340,6 +343,13 @@ class WebApp:
                 return json_error(400, "unknown action")
             payload["action"] = action
         self.bus.publish("remote/state", payload, 0, False)
+        return web.json_response({"ok": True})
+
+    @requires_admin
+    async def map_scan(self, request):
+        """Ask the arbiter to look around (the crawler turns on the spot)."""
+        self.bus.publish("map/scan", {"id": os.urandom(8).hex(), "user": request[SESSION]["user"],
+                                      "ts": time.time()}, 1, False)
         return web.json_response({"ok": True})
 
     # --- bluetooth ---

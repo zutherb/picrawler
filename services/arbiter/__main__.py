@@ -12,7 +12,7 @@ from .arbiter import Arbiter
 
 TICK_S = 0.05
 SUBSCRIPTIONS = ("sensor/#", "state/motion", "status", "event/rejected", "agent/status", "agent/goal",
-                 "remote/state")
+                 "remote/state", "map/scan")
 
 
 def main():

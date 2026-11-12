@@ -58,6 +58,25 @@
           connection and the crawler stops after the current step. The obstacle stop and the battery
           protection always apply.</p>
       </section>
+
+      <section class="panel map-panel">
+        <div class="row">
+          <h2>Surroundings</h2>
+          <span class="tag" id="map-status">no scan yet</span>
+        </div>
+        <canvas id="map" class="local-map" width="480" height="480" aria-label="Map around the crawler"></canvas>
+        <div class="map-foot">
+          <span class="muted small" id="map-info">The crawler turns once on the spot and measures with the
+            ultrasonic sensor after every step.</span>
+          <button id="map-scan">Scan</button>
+        </div>
+        <div class="map-legend muted small">
+          <span><i class="swatch free"></i>free</span>
+          <span><i class="swatch occupied"></i>obstacle</span>
+          <span><i class="swatch unknown"></i>unknown</span>
+          <span>rings every 50 cm</span>
+        </div>
+      </section>
     </div>
   </main>
   <script src="/static/app.js"></script>

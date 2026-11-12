@@ -83,7 +83,8 @@ if AioHTTPTestCase is not None:
             self.assertEqual(self.bus.sent[-1][1]["sit"], True)
             for path, body in (("/api/vision/mode", {"mode": "off"}), ("/api/system/restart", {"unit": "picrawler-body.service"}),
                                ("/api/bluetooth/scan", {}), ("/api/agent/ask", {"text": "walk"}),
-                               ("/api/mqtt/clear", {}), ("/api/remote", {"x": 0, "y": -1})):
+                               ("/api/mqtt/clear", {}), ("/api/remote", {"x": 0, "y": -1}),
+                               ("/api/map/scan", {})):
                 self.assertEqual((await self.post(path, body, csrf)).status, 403, path)
             self.assertEqual((await self.client.get("/api/system")).status, 403)
             self.assertEqual((await self.client.get("/api/mqtt/topics")).status, 403)
@@ -149,6 +150,12 @@ if AioHTTPTestCase is not None:
             for bad in ({"x": 2}, {"y": "up"}, {"speed": 0}, {"speed": True}, {"action": "explode"}):
                 self.assertEqual((await self.post("/api/remote", bad, csrf)).status, 400, bad)
             self.assertEqual((await self.client.get("/remote")).status, 200)
+
+        async def test_map_scan_api(self):
+            csrf = await self.login("anna")
+            self.assertEqual((await self.post("/api/map/scan", {}, csrf)).status, 200)
+            topic, payload = self.bus.sent[-1]
+            self.assertEqual((topic, payload["user"]), ("map/scan", "anna"))
 
         async def test_mqtt_debug_api(self):
             await self.login("anna")
