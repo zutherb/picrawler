@@ -4,6 +4,8 @@
   become: true
   roles:
     - base
+    - role: network
+      when: network_hotspot_enabled | default(true) | bool
     - mosquitto
     # after the packages and users exist, before the robot stack is installed
     - role: storage

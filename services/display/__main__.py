@@ -53,7 +53,8 @@ def main():
     full_cfg = config.load(args.config)
     cfg = full_cfg.get("display", {})
     device = PngDevice(cfg.get("png", "/tmp/picrawler-display.png")) if args.fake else open_device(cfg)
-    info = SysInfo(cfg.get("wifi_interface") or None, cfg.get("nvme_path", "/mnt/picrawler-data"))
+    info = SysInfo(cfg.get("wifi_interface") or None, cfg.get("nvme_path", "/mnt/picrawler-data"),
+                   cfg.get("network_status", "/run/picrawler/network.json"))
     interval = cfg.get("interval_s", 1.0)
     thresholds = dict(DEFAULT_THRESHOLDS, **{k: tuple(v) for k, v in cfg.get("thresholds", {}).items()})
     latest = {"battery": None}

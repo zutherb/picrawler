@@ -61,6 +61,9 @@ If everything works, set `picrawler_services_start: true` in Ansible.
 ## Web UI
 
 On the Pi: `https://<pi>:8080` (self-signed certificate, accept it once).
+Away from home the Pi opens its own Wi-Fi `PiCrawler-1` (password from the
+vault); connect your phone and open `https://10.42.0.1:8080`. The OLED shows
+the address.
 Users come from `picrawler_web_users` in Ansible; create a password hash with
 
 ```bash

@@ -10,6 +10,7 @@ import re
 import time
 
 from services.common.metrics import CpuSampler, read_metrics
+from services.display.sysinfo import network_status
 
 UNIT = re.compile(r"^picrawler-[a-z0-9_-]+(@[a-z0-9_-]+)?\.service$")
 
@@ -94,7 +95,7 @@ class System:
         return out
 
     async def info(self):
-        info = {"time": time.time(), **read_metrics(self.cpu)}
+        info = {"time": time.time(), **read_metrics(self.cpu), "network": network_status()}
         try:
             with open(self.thermal_path) as f:
                 info["cpu_temp_c"] = round(int(f.read().strip()) / 1000, 1)
@@ -148,6 +149,7 @@ class FakeSystem:
                 "cpu_percent": round(15 + random.random() * 30, 1), "load": [0.8, 0.6, 0.5],
                 "memory": {"total": 8 * gib, "used": int(1.9 * gib), "percent": 23.8},
                 "disk": {"total": 32 * gib, "used": 9 * gib, "percent": 28.1},
+                "network": {"mode": "client", "connection": "Home", "clients": 0, "ip": None},
                 "throttled": {"raw": "0x0", "under_voltage": False, "throttled": False,
                               "under_voltage_since_boot": False, "throttled_since_boot": False}}
 

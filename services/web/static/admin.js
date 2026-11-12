@@ -167,6 +167,12 @@ function renderInfo(info) {
                   ? "under-voltage since boot" : "ok", !t ? "" : t.under_voltage ? "bad" : t.under_voltage_since_boot ? "warn" : "ok"));
   sys.append(tile("Throttling", !t ? "–" : t.throttled ? "throttled now" : t.throttled_since_boot ? "since boot" : "none",
                   !t ? "" : t.throttled ? "bad" : t.throttled_since_boot ? "warn" : "ok"));
+  const net = info.network;
+  if (net) {
+    const text = net.mode === "hotspot" ? `hotspot ${net.ip} · ${net.clients} connected`
+      : net.mode === "client" ? `Wi-Fi ${net.connection}` : net.mode;
+    sys.append(tile("Network", text, net.mode === "client" ? "ok" : net.mode === "hotspot" ? "warn" : "bad"));
+  }
   if (info.uptime_s != null) sys.append(tile("Uptime", `${Math.floor(info.uptime_s / 3600)} h ${Math.floor(info.uptime_s / 60) % 60} min`, "ok"));
 }
 

@@ -11,5 +11,7 @@ vault_mqtt_password_sensor_speech: "CHANGE_ME_min_16_chars"
 vault_mqtt_password_agent: "CHANGE_ME_min_16_chars"
 vault_mqtt_password_voice: "CHANGE_ME_min_16_chars"
 vault_mqtt_password_display: "CHANGE_ME_min_16_chars"
+# Wi-Fi password of the PiCrawler hotspot (8-63 characters)
+vault_hotspot_psk: "CHANGE_ME_8_to_63"
 # python3 -m services.web.hashpw  (prints scrypt$...)
 vault_web_admin_password_hash: "scrypt$CHANGE_ME"

@@ -165,7 +165,7 @@
   ansible.builtin.command: >-
     openssl req -x509 -newkey rsa:2048 -nodes -days 3650
     -subj "/CN={{ inventory_hostname }}"
-    -addext "subjectAltName=DNS:{{ inventory_hostname }},DNS:{{ ansible_facts['hostname'] | default(inventory_hostname) }}.local"
+    -addext "subjectAltName=DNS:{{ inventory_hostname }},DNS:{{ ansible_facts['hostname'] | default(inventory_hostname) }}.local,IP:10.42.0.1"
     -keyout {{ picrawler_config_dir }}/web-tls/key.pem
     -out {{ picrawler_config_dir }}/web-tls/cert.pem
   args:

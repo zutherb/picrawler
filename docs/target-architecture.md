@@ -752,6 +752,18 @@ actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wa
     while powered, so on a reboot the logo stays visible throughout.
   - A missing display never fails the boot. Bootloader and the first kernel
     seconds cannot be shown without a kernel framebuffer driver; not done.
+- **Wi-Fi hotspot fallback** (`network` role): at home the Pi joins the
+  known Wi-Fi. If none is connected 45 s after boot (later: 20 s after
+  losing it), `picrawler-netwatch` brings up the NetworkManager profile
+  `picrawler-hotspot`: SSID `PiCrawler-<robot_id>`, WPA2 with
+  `vault_hotspot_psk`, 2.4 GHz channel 6, shared IPv4 with DHCP, the Pi at
+  **10.42.0.1** (web UI `https://10.42.0.1:8080`). While nobody is
+  connected, every 10 minutes it takes the hotspot down and lets
+  NetworkManager try the known networks for 40 s; with a phone connected it
+  never switches. State in `/run/picrawler/network.json`: the OLED shows a
+  radio-mast icon and the hotspot IP, the admin page a Network tile.
+  Bluetooth PAN was considered and rejected: ~1-2 Mbit/s is too little for
+  the video stream.
 - Open: whether the HatDrive! AI and the Robot HAT fit together
   mechanically, and the extra power draw of the NVMe on battery.
 

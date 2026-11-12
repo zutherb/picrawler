@@ -5,6 +5,7 @@ Sets up a Raspberry Pi (Raspberry Pi OS Bookworm) for the PiCrawler:
 | Role | What it does |
 |---|---|
 | `base` | apt packages, enables I2C (reboots if needed), system user `picrawler` in `i2c`/`gpio` |
+| `network` | Wi-Fi hotspot fallback: own Wi-Fi `PiCrawler-1` (10.42.0.1) when no known network is in range, back to the known one when the hotspot is idle |
 | `storage` | NVMe as data disk: code, venv, models, logs, journal, Mosquitto data, apt cache and swap move there; `/tmp` in RAM. The system stays on the SD card (no NVMe boot behind the HatDrive! AI switch) |
 | `mosquitto` | broker with login only, hashed passwords, ACLs as in `docs/target-architecture.md` |
 | `picrawler` | code to `/opt/picrawler/src`, venv, `robot_hat`, configs in `/etc/picrawler`, systemd units + `picrawler.target`, Coral test model, web TLS certificate, polkit rule for the web user |
@@ -76,6 +77,9 @@ sudo systemctl stop picrawler.target
 | `mosquitto_listen_address` | `127.0.0.1` | non-local only with `mosquitto_allow_plaintext_remote: true` (no TLS yet) |
 | `picrawler_robot_hat_version` | `2.5.x` | pin to a commit SHA for reproducible installs |
 | `base_reboot_allowed` | `true` | automatic reboot after enabling I2C |
+| `network_hotspot_enabled` | `true` | hotspot fallback; password in `vault_hotspot_psk` (8-63 characters) |
+| `network_hotspot_band` / `_channel` | `bg` / `6` | `a` / `36` for 5 GHz (leaves 2.4 GHz to Bluetooth, not every phone supports it) |
+| `network_wifi_networks` | `[]` | optional client networks to add (Imager settings are kept) |
 | `picrawler_splash_dir` | `/usr/local/lib/picrawler` | boot splash script and picture (on the SD card) |
 | `picrawler_display_enabled` | `true` | OLED status display; `picrawler_display_driver` `ssd1306` (0.96") or `sh1106` (most 1.3"), address `0x3C` |
 | `picrawler_battery_low_v` / `_critical_v` | `7.0` / `6.6` | 2S Li-ion: warn / sit down and refuse motion |

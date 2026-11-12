@@ -77,6 +77,16 @@ def draw_wifi(draw, x, y, bars):
 BT_W = 9
 
 
+def draw_hotspot(draw, x, y):
+    """Radio mast with waves left and right, ((•)): the Pi runs its own Wi-Fi."""
+    draw.rectangle((x + 4, y + 2, x + 6, y + 4), fill=1)          # antenna tip
+    draw.line((x + 5, y + 5, x + 5, y + 9), fill=1)               # mast
+    draw.line((x + 3, y + 9, x + 7, y + 9), fill=1)               # foot
+    for box in ((x + 1, y, x + 9, y + 6), (x - 1, y - 2, x + 11, y + 8)):
+        draw.arc(box, start=125, end=235, fill=1)                  # left wave
+        draw.arc(box, start=305, end=55, fill=1)                   # right wave
+
+
 def draw_bluetooth(draw, x, y, state):
     """Bluetooth rune, 5x9; inverted box when connected, crossed out when off."""
     if state == "connected":
@@ -181,8 +191,12 @@ def render(info, shift=(0, 0), page=0, image=None, blink=False, thresholds=None)
 
     bt_state = (info.get("bluetooth") or ("absent", 0))[0]
     draw_bluetooth(draw, dx, dy, bt_state)
-    wifi = info.get("wifi")
-    draw_wifi(draw, dx + BT_W + 2, dy, wifi_bars(wifi[1] if wifi else None))
+    network = info.get("network") or {}
+    if network.get("mode") == "hotspot":
+        draw_hotspot(draw, dx + BT_W + 2, dy)
+    else:
+        wifi = info.get("wifi")
+        draw_wifi(draw, dx + BT_W + 2, dy, wifi_bars(wifi[1] if wifi else None))
     text_x = dx + BT_W + 15
     text = header_text(info)
     temp = info.get("temp")

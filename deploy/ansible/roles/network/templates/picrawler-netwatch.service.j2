@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+[Unit]
+Description=PiCrawler Wi-Fi hotspot fallback
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 {{ network_script_dir }}/netwatch.py --hotspot {{ network_hotspot_profile }} --interface {{ network_interface }} --status {{ network_status_file }} --boot-grace {{ network_boot_grace_s }} --retry {{ network_retry_s }}
+RuntimeDirectory=picrawler
+RuntimeDirectoryPreserve=yes
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

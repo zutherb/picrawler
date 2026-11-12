@@ -3,6 +3,7 @@
 Read straight from /proc and /sys so the display works without any other
 service running.
 """
+import json
 import os
 import re
 import shutil
@@ -11,6 +12,7 @@ import socket
 from services.common.metrics import CpuSampler, parse_meminfo
 
 WIRELESS = "/proc/net/wireless"
+NETWORK_STATUS = "/run/picrawler/network.json"    # written by picrawler-netwatch
 BLUETOOTH = "/sys/class/bluetooth"
 RFKILL = "/sys/class/rfkill"
 # The kernel adds hci0:<handle> for every open Bluetooth connection.
@@ -72,6 +74,16 @@ def bluetooth_state(sys_bt=BLUETOOTH, sys_rfkill=RFKILL):
     return ("connected" if connections else "on"), connections
 
 
+def network_status(path=NETWORK_STATUS):
+    """Hotspot watcher state, or None when the watcher does not run."""
+    try:
+        with open(path) as f:
+            status = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return status if isinstance(status, dict) else None
+
+
 def local_ip():
     """Address of the interface with the default route; sends no packets."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -102,15 +114,19 @@ def is_separate_mount(path):
 
 class SysInfo:
 
-    def __init__(self, interface=None, nvme_path="/mnt/picrawler-data"):
+    def __init__(self, interface=None, nvme_path="/mnt/picrawler-data", network_path=NETWORK_STATUS):
         self.interface = interface
         self.nvme_path = nvme_path
+        self.network_path = network_path
         self.cpu = CpuSampler()
         self.cpu.sample()   # first call only sets the baseline
 
     def read(self):
         info = {"cpu": self.cpu.sample(), "ram": None, "sd": percent_used("/"), "nvme": None,
-                "wifi": None, "ip": local_ip(), "temp": None, "bluetooth": bluetooth_state()}
+                "wifi": None, "ip": local_ip(), "temp": None, "bluetooth": bluetooth_state(),
+                "network": network_status(self.network_path)}
+        if info["network"] and info["network"].get("mode") == "hotspot":
+            info["ip"] = info["network"].get("ip") or info["ip"]   # no default route in hotspot mode
         try:
             with open("/proc/meminfo") as f:
                 mem = parse_meminfo(f.read())

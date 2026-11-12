@@ -1,0 +1,18 @@
+---
+# Hotspot fallback: when no known Wi-Fi is in range, the Pi opens its own.
+network_hotspot_enabled: true
+network_interface: wlan0
+network_hotspot_profile: picrawler-hotspot
+network_hotspot_ssid: "PiCrawler-{{ picrawler_robot_id | default('1') }}"
+network_hotspot_psk: "{{ vault_hotspot_psk }}"     # WPA2, 8-63 characters
+# 2.4 GHz works with every phone; "a" (5 GHz) leaves 2.4 GHz to Bluetooth
+network_hotspot_band: bg
+network_hotspot_channel: 6
+network_wifi_country: DE
+network_boot_grace_s: 45      # wait this long for a known network after boot
+network_retry_s: 600          # idle hotspot: look for known networks this often
+network_status_file: /run/picrawler/network.json
+network_script_dir: /usr/local/lib/picrawler
+# Optional client networks to add, e.g. [{ssid: Home, psk: "{{ vault_wifi_home }}", priority: 10}].
+# Networks set up with Raspberry Pi Imager are kept as they are.
+network_wifi_networks: []
