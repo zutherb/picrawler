@@ -78,6 +78,11 @@ final class RobotClient: NSObject, URLSessionDataDelegate {
         try await post("api/stop", ["sit": sit])
     }
 
+    /// Ask the arbiter to look around; the result arrives as "map" events.
+    func scan() async throws {
+        try await post("api/map/scan", [:])
+    }
+
     // MARK: live data
 
     /// Server-sent events: (event name, JSON object).

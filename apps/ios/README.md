@@ -1,7 +1,8 @@
 # PiCrawler for iPhone and iPad
 
 Native SwiftUI remote control in the look of the web UI's Remote page:
-camera stream, joystick (with haptics), speed, actions and a big STOP.
+camera stream, joystick (with haptics), speed, actions, a big STOP and the
+Surroundings map (look-around scan, `map/local` via the server-sent events).
 Side by side on iPad and in landscape, stacked on iPhone in portrait.
 
 ## Finding the robot

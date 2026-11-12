@@ -23,7 +23,11 @@ struct RemoteView: View {
                 ScrollView {
                     if wide {
                         HStack(alignment: .top, spacing: 18) {
-                            cameraPanel.frame(maxWidth: .infinity)
+                            VStack(spacing: 18) {
+                                cameraPanel
+                                MapPanel()
+                            }
+                            .frame(maxWidth: .infinity)
                             controlsPanel.frame(width: min(420, geo.size.width * 0.4))
                         }
                         .padding(18)
@@ -31,6 +35,7 @@ struct RemoteView: View {
                         VStack(spacing: 16) {
                             cameraPanel
                             controlsPanel
+                            MapPanel()
                         }
                         .padding(14)
                     }

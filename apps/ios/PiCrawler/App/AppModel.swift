@@ -23,6 +23,7 @@ final class AppModel: ObservableObject {
     @Published var distanceCM: Double?
     @Published var battery: (percent: Int, level: String)?
     @Published var linkUp = false
+    @Published var localMap: LocalMap?
 
     let discovery = Discovery()
     private(set) var client: RobotClient?
@@ -117,6 +118,7 @@ final class AppModel: ObservableObject {
         }
         client = nil
         frame = nil
+        localMap = nil
         phase = .searching
         start()
     }
@@ -133,6 +135,7 @@ final class AppModel: ObservableObject {
                         for try await (event, data) in client.events() {
                             self?.linkUp = true
                             if event == "status" { self?.apply(status: data) }
+                            if event == "map", let map = LocalMap(data) { self?.localMap = map }
                         }
                     } catch {}
                     self?.linkUp = false
@@ -181,6 +184,14 @@ final class AppModel: ObservableObject {
         Task {
             do { try await client.remote(x: 0, y: 0, speed: speed, action: name) }
             catch { message = error.localizedDescription }
+        }
+    }
+
+    func scan() {
+        guard let client else { return }
+        Task {
+            do { try await client.scan() }
+            catch { message = "Scan failed: \(error.localizedDescription)" }
         }
     }
 
