@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PiCrawler admin</title>
   <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/theme.js"></script>
+  <link rel="icon" href="/static/logo-mark.svg" type="image/svg+xml">
 </head>
 <body>
   <main>
@@ -52,7 +54,11 @@
         <thead><tr><th>Unit</th><th>State</th><th>Memory</th><th>Since</th><th></th></tr></thead>
         <tbody id="services"></tbody>
       </table>
-      <pre class="journal hidden" id="journal"></pre>
+      <div class="term hidden" id="journal-card">
+        <div class="term-bar"><span class="d r"></span><span class="d y"></span><span class="d g"></span>
+          <span class="title" id="journal-title">journalctl</span></div>
+        <pre class="journal" id="journal"></pre>
+      </div>
     </section>
 
     <section class="panel">

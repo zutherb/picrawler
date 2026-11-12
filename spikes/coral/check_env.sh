@@ -26,7 +26,10 @@ section "PCIe settings (/boot/firmware/config.txt)"
 grep -nE '^(kernel|dtparam=pciex1|dtoverlay=pcie)' /boot/firmware/config.txt 2>/dev/null || echo "no PCIe-related lines"
 
 section "PCIe / M.2 Coral"
-lspci 2>/dev/null | grep -i '089a' || echo "no PCIe Coral in lspci"
+echo "--- PCIe devices (expect switch, NVMe, Coral 089a)"
+lspci 2>/dev/null || echo "lspci not available"
+echo "number of Coral TPUs on PCIe: $(lspci 2>/dev/null | grep -ci '089a')"
+lsblk -d -o NAME,SIZE,MODEL 2>/dev/null | grep -i nvme || echo "no NVMe block device"
 ls -l /dev/apex_* 2>/dev/null || echo "no /dev/apex_* (gasket driver not loaded)"
 
 section "Edge TPU runtime"

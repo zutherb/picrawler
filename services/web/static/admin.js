@@ -171,7 +171,8 @@ function renderInfo(info) {
 }
 
 async function showJournal(unit) {
-  journal.classList.remove("hidden");
+  document.getElementById("journal-card").classList.remove("hidden");
+  document.getElementById("journal-title").textContent = `journalctl -u ${unit} -n 100`;
   journal.textContent = "Loading…";
   try {
     journal.textContent = await PC.api("GET", "/api/system/journal?unit=" + encodeURIComponent(unit));

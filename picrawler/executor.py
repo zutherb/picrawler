@@ -44,8 +44,11 @@ COMMAND_KINDS = ("action", "frame", "sit")
 
 class MotionExecutor:
 
-    def __init__(self, crawler, on_state=None, queue_max=8, lockout_s=1.0, clock=time.monotonic):
+    def __init__(self, crawler, on_state=None, queue_max=8, lockout_s=1.0, clock=time.monotonic, io_lock=None):
         self._crawler = crawler
+        # Held while a frame is sent, so other readers of the HAT's
+        # microcontroller (e.g. the battery ADC) do not interleave on I2C.
+        self._io_lock = io_lock or threading.Lock()
         self._on_state = on_state
         self._queue_max = queue_max
         self._lockout_s = lockout_s
@@ -183,7 +186,8 @@ class MotionExecutor:
             if self._epoch != epoch:
                 self._emit(status="stopping", cmd=cmd)
                 return
-            self._crawler.do_step(frame, speed=cmd.speed)
+            with self._io_lock:
+                self._crawler.do_step(frame, speed=cmd.speed)
 
     def _legs(self):
         try:

@@ -18,6 +18,7 @@ topic write {{ p }}/cmd/#
 topic write {{ p }}/vision/mode
 topic write {{ p }}/arbiter/status
 topic read {{ p }}/agent/status
+topic read {{ p }}/remote/state
 {% elif user.role == 'sensor' %}
 topic write {{ p }}/sensor/{{ user.sensor }}/#
 {% if user.sensor == 'vision' %}
@@ -26,19 +27,15 @@ topic read {{ p }}/vision/mode
 topic read {{ p }}/voice/speaking
 {% endif %}
 {% elif user.role == 'ui' %}
-topic read {{ p }}/state/#
-topic read {{ p }}/status
-topic read {{ p }}/event/#
-topic read {{ p }}/sensor/#
+{# read everything for the MQTT debug page; writes stay limited #}
+topic read {{ p }}/#
 topic write {{ p }}/cmd/action
 topic write {{ p }}/cmd/stop
 topic write {{ p }}/cmd/heartbeat
 topic write {{ p }}/vision/mode
-topic read {{ p }}/arbiter/status
 topic write {{ p }}/web/status
 topic write {{ p }}/agent/ask
-topic read {{ p }}/agent/#
-topic read {{ p }}/voice/status
+topic write {{ p }}/remote/state
 {% elif user.role == 'agent' %}
 {# a goal source like the UI: may command and stop, never state or sensors #}
 topic read {{ p }}/status
@@ -52,5 +49,9 @@ topic write {{ p }}/agent/#
 {% elif user.role == 'voice' %}
 topic read {{ p }}/agent/reply
 topic write {{ p }}/voice/#
+{% elif user.role == 'display' %}
+topic read {{ p }}/state/battery
+topic write {{ p }}/display/status
+topic write {{ p }}/display/frame
 {% endif %}
 {% endfor %}

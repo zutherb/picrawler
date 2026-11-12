@@ -1,0 +1,24 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Restart journald
+  ansible.builtin.systemd_service:
+    name: systemd-journald
+    state: restarted
+
+- name: Recreate the swap file
+  ansible.builtin.shell: |
+    set -eu
+    swapoff -a
+    dphys-swapfile setup
+    dphys-swapfile swapon
+    rm -f /var/swap
+  args:
+    executable: /bin/bash
+  changed_when: true
+
+- name: Flush journal to disk
+  ansible.builtin.command: journalctl --flush
+  changed_when: true

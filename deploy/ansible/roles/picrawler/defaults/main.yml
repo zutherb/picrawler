@@ -3,6 +3,9 @@ picrawler_user: picrawler
 picrawler_web_user: picrawler-web
 picrawler_state_dir: /var/lib/picrawler
 picrawler_web_state_dir: /var/lib/picrawler-web    # home of the web user (base role)
+# With the storage role, units wait for these (bind mounts from the NVMe)
+# instead of writing to the SD card underneath when the NVMe is missing.
+picrawler_requires_mounts: "{{ [picrawler_install_dir, picrawler_state_dir, picrawler_web_state_dir] if storage_enabled | default(true) | bool else [] }}"
 picrawler_robot_id: "1"
 picrawler_install_dir: /opt/picrawler
 picrawler_src_dir: "{{ picrawler_install_dir }}/src"
@@ -32,7 +35,10 @@ picrawler_agent_pip_packages:
 # enable this after a first manual test on the robot.
 picrawler_services_start: false
 
-picrawler_services: "{{ picrawler_core_services + (picrawler_speech_services if picrawler_speech_enabled | bool else []) }}"
+picrawler_services: >-
+  {{ picrawler_core_services
+     + (picrawler_speech_services if picrawler_speech_enabled | bool else [])
+     + (picrawler_display_services if picrawler_display_enabled | bool else []) }}
 
 picrawler_core_services:
   - name: body
@@ -60,6 +66,34 @@ picrawler_core_services:
     mqtt_user: ui
     user: "{{ picrawler_web_user }}"
     groups: [bluetooth, systemd-journal, video]
+    restart: on-failure
+    stop_timeout: 5
+
+# 128x64 I2C OLED (SSD1306 or SH1106): Wi-Fi quality and usage bars.
+picrawler_display_enabled: true
+picrawler_display_driver: ssd1306       # sh1106 for most 1.3" modules
+picrawler_display_address: "0x3C"
+picrawler_display_rotate: 0             # 0..3, quarter turns
+picrawler_display_contrast: 128
+# Boot splash lives on the SD card: it runs before the NVMe is mounted.
+picrawler_splash_dir: /usr/local/lib/picrawler
+picrawler_display_thresholds:   # [warning, critical]
+  cpu: [80, 95]
+  ram: [80, 92]
+  sd: [80, 95]
+  nvme: [80, 95]
+  battery: [20, 5]              # percent left
+  temp: [70, 80]                # degrees C
+picrawler_display_pip_packages:
+  - luma.oled
+picrawler_display_services:
+  - name: display
+    module: services.display
+    description: PiCrawler OLED status display
+    mqtt_user: display          # only for the battery from the body service
+    groups: [i2c]
+    conflicts: [picrawler-splash.service]   # starting it ends the boot animation
+    nice: 10
     restart: on-failure
     stop_timeout: 5
 
@@ -108,6 +142,9 @@ picrawler_executor_lockout_s: 1.0
 picrawler_watchdog_heartbeat_timeout_s: 1.0
 picrawler_watchdog_sit_after_disconnect_s: 5.0
 picrawler_steps_max: 10
+# 2S Li-ion pack: warn below low_v, sit down and refuse motion below critical_v
+picrawler_battery_low_v: 7.0
+picrawler_battery_critical_v: 6.6
 picrawler_allowed_actions:
   - stand
   - sit

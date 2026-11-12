@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PiCrawler live</title>
   <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/theme.js"></script>
+  <link rel="icon" href="/static/logo-mark.svg" type="image/svg+xml">
 </head>
 <body>
   <main>
@@ -21,10 +23,22 @@
           <canvas id="overlay"></canvas>
         </div>
       </section>
-      <section class="panel">
-        <h2>Recent</h2>
-        <ul class="feed" id="feed"></ul>
-      </section>
+      <div class="side">
+        <section class="panel" id="oled-panel">
+          <div class="row">
+            <h2>Display</h2>
+            <span class="muted" id="oled-note">waiting for the display…</span>
+          </div>
+          <div class="oled-bezel"><canvas id="oled" width="128" height="64"></canvas></div>
+        </section>
+        <section class="panel recent" id="recent" tabindex="0" role="button" aria-label="Show all log entries">
+          <div class="row">
+            <h2>Recent</h2>
+            <span class="muted more">show all →</span>
+          </div>
+          <ul class="feed compact" id="feed"></ul>
+        </section>
+      </div>
     </div>
     <section class="panel admin-only hidden" id="agent-panel">
       <div class="row">
@@ -45,6 +59,22 @@
       <div class="tiles" id="tiles"></div>
     </section>
   </main>
+
+  <dialog id="log-dialog" class="log-dialog">
+    <div class="row">
+      <h2>All entries</h2>
+      <input id="log-filter" placeholder="Filter (label or text)" autocomplete="off">
+      <span class="muted" id="log-count"></span>
+      <button class="stop" id="dialog-stop">STOP</button>
+      <button id="log-close">Close</button>
+    </div>
+    <div class="dialog-body">
+      <table>
+        <thead><tr><th>Start</th><th>End</th><th>Label</th><th>Score</th><th>Count</th><th>Details</th></tr></thead>
+        <tbody id="log-rows"></tbody>
+      </table>
+    </div>
+  </dialog>
   <script src="/static/app.js"></script>
   <script src="/static/live.js"></script>
 </body>

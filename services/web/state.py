@@ -6,7 +6,7 @@ runs on the web server's event loop thread.
 """
 import time
 
-LOGGED_EVENTS = ("event/stop", "event/watchdog", "event/rejected")
+LOGGED_EVENTS = ("event/stop", "event/watchdog", "event/rejected", "event/battery")
 PRUNE_EVERY_S = 3600.0
 
 
@@ -19,9 +19,10 @@ class LiveState:
         self._wall = wall
         self.snapshot = {
             "body": None, "motion": None, "arbiter": None, "vision": None,
-            "sensors": {}, "gamepad": None, "distance_cm": None, "agent": None, "voice": None,
+            "sensors": {}, "gamepad": None, "distance_cm": None, "agent": None, "voice": None, "battery": None,
         }
         self.vision_mode = "detect"
+        self.display_frame = None         # latest OLED picture (display/frame)
         self._dirty = True
         self._last_prune = None
 
@@ -34,12 +35,17 @@ class LiveState:
             self._set("body", payload)
         elif suffix == "state/motion":
             self._set("motion", payload)
+        elif suffix == "state/battery":
+            self._set("battery", payload)
         elif suffix == "arbiter/status":
             self._set("arbiter", payload)
         elif suffix == "agent/status":
             self._set("agent", payload)
         elif suffix == "voice/status":
             self._set("voice", payload)
+        elif suffix == "display/frame":
+            self.display_frame = payload
+            self.push("display", payload)
         elif suffix == "agent/reply" and not retain:
             self._log_agent(payload)
         elif suffix == "sensor/vision/status":

@@ -7,6 +7,7 @@ See docs/target-architecture.md, sections 4 and 5.
 import time
 
 from picrawler.executor import Command, Priority
+from services.body.battery import BatteryMonitor
 from services.common import schema
 
 PRIORITY = {"goal": Priority.GOAL, "reflex": Priority.REFLEX}
@@ -29,6 +30,9 @@ class BodyAdapter:
         self._last_heartbeat = None
         self._disconnected_since = None
         self._sat_after_disconnect = False
+        battery = cfg.get("battery", {})
+        self.battery = BatteryMonitor(low_v=battery.get("low_v", 7.0), critical_v=battery.get("critical_v", 6.6),
+                                      hold_s=battery.get("hold_s", 20.0))
 
     # --- connection ---
 
@@ -74,6 +78,9 @@ class BodyAdapter:
             self._reject(suffix, payload, str(e))
             return
 
+        if self.battery.level == "critical":
+            self._reject(suffix, payload, "battery critical, charge first")
+            return
         if cmd.priority == Priority.GOAL and not self._heartbeat_fresh():
             self._reject(suffix, payload, "no heartbeat from a controller")
             return
@@ -96,6 +103,20 @@ class BodyAdapter:
 
     def _heartbeat_fresh(self):
         return self._last_heartbeat is not None and self._mono() - self._last_heartbeat <= self.heartbeat_timeout_s
+
+    def on_battery(self, volts):
+        """A raw voltage reading (from the battery thread)."""
+        changed = self.battery.feed(volts, self._mono())
+        state = self.battery.state()
+        if not state["present"]:
+            return
+        self.publish("state/battery", dict(state, ts=self._wall()), 1, True)
+        if changed is None:
+            return
+        self._event("battery", "battery %s at %.2f V" % (changed, state["voltage"]))
+        if changed == "critical":
+            # Sit down before the cells cut out and the robot collapses.
+            self.executor.stop(Priority.SAFETY, sit=True)
 
     # --- outgoing ---
 

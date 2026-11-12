@@ -4,6 +4,9 @@ Description=PiCrawler sensor %i
 After=network-online.target mosquitto.service
 Wants=network-online.target
 PartOf=picrawler.target
+{% if picrawler_requires_mounts | length > 0 %}
+RequiresMountsFor={{ picrawler_requires_mounts | join(' ') }}
+{% endif %}
 
 [Service]
 Type=simple

@@ -1,4 +1,4 @@
-"""Light system metrics straight from /proc, for the admin page.
+"""Light system metrics straight from /proc, for the admin page and the OLED.
 
 No Prometheus on the Pi: it would cost RAM and SD card writes for one robot.
 For history, run node_exporter here and Prometheus/Grafana elsewhere.

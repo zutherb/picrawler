@@ -10,6 +10,7 @@ if AioHTTPTestCase is not None:
     from services.web.app import Hub, WebApp
     from services.web.auth import RateLimiter, Sessions, Users, hash_password
     from services.web.bluetooth import FakeBluetooth
+    from services.web.monitor import MqttMonitor
     from services.web.sightings import SightingTracker
     from services.web.state import LiveState
     from services.web.store import LogStore
@@ -22,6 +23,8 @@ if AioHTTPTestCase is not None:
     })
 
     class RecordingBus:
+        prefix = "crawler/1/"
+
         def __init__(self):
             self.sent = []
 
@@ -38,9 +41,10 @@ if AioHTTPTestCase is not None:
             self.addCleanup(store.close)
             hub = Hub()
             state = LiveState(store, SightingTracker(), hub.push)
+            self.monitor = MqttMonitor()
             self.webapp = WebApp({"http": {"vision_stream": "http://127.0.0.1:9/none"}}, USERS, Sessions(),
                                  RateLimiter(limit=3), state, hub, self.bus, FakeBluetooth(delay=0),
-                                 self.system, store)
+                                 self.system, store, monitor=self.monitor)
             return self.webapp.build()
 
         async def login(self, user):
@@ -78,9 +82,13 @@ if AioHTTPTestCase is not None:
             self.assertEqual(self.bus.sent[-1][0], "cmd/stop")
             self.assertEqual(self.bus.sent[-1][1]["sit"], True)
             for path, body in (("/api/vision/mode", {"mode": "off"}), ("/api/system/restart", {"unit": "picrawler-body.service"}),
-                               ("/api/bluetooth/scan", {}), ("/api/agent/ask", {"text": "walk"})):
+                               ("/api/bluetooth/scan", {}), ("/api/agent/ask", {"text": "walk"}),
+                               ("/api/mqtt/clear", {}), ("/api/remote", {"x": 0, "y": -1})):
                 self.assertEqual((await self.post(path, body, csrf)).status, 403, path)
             self.assertEqual((await self.client.get("/api/system")).status, 403)
+            self.assertEqual((await self.client.get("/api/mqtt/topics")).status, 403)
+            self.assertEqual((await self.client.get("/api/mqtt/messages")).status, 403)
+            self.assertEqual((await self.client.get("/mqtt", allow_redirects=False)).status, 302)
             resp = await self.client.get("/admin", allow_redirects=False)
             self.assertEqual(resp.status, 302)
 
@@ -121,7 +129,38 @@ if AioHTTPTestCase is not None:
             self.assertIn("attachment", resp.headers["Content-Disposition"])
             page = await self.client.get("/")
             self.assertIn("script-src 'self'", page.headers["Content-Security-Policy"])
+            self.assertEqual((await self.client.get("/static/app.js")).headers["Cache-Control"], "no-cache")
             self.assertEqual(page.headers["X-Frame-Options"], "DENY")
+
+        async def test_display_mirror_api(self):
+            await self.login("gus")              # viewers see it on the live page
+            self.assertEqual((await self.client.get("/api/display")).status, 404)
+            self.webapp.state.on_message("display/frame", {"w": 128, "h": 64, "data": "AA==", "ts": 1.0})
+            self.assertEqual((await (await self.client.get("/api/display")).json())["w"], 128)
+
+        async def test_remote_api(self):
+            csrf = await self.login("anna")
+            self.assertEqual((await self.post("/api/remote", {"x": 0.5, "y": -1, "speed": 60}, csrf)).status, 200)
+            topic, payload = self.bus.sent[-1]
+            self.assertEqual((topic, payload["x"], payload["y"], payload["speed"], payload["user"]),
+                             ("remote/state", 0.5, -1.0, 60, "anna"))
+            self.assertEqual((await self.post("/api/remote", {"action": "wave"}, csrf)).status, 200)
+            self.assertEqual(self.bus.sent[-1][1]["action"], "wave")
+            for bad in ({"x": 2}, {"y": "up"}, {"speed": 0}, {"speed": True}, {"action": "explode"}):
+                self.assertEqual((await self.post("/api/remote", bad, csrf)).status, 400, bad)
+            self.assertEqual((await self.client.get("/remote")).status, 200)
+
+        async def test_mqtt_debug_api(self):
+            await self.login("anna")
+            self.monitor.record("cmd/stop", b'{"sit": false}', False, 1, 1.0)
+            self.monitor.record("sensor/gamepad/state", b'{"x": 0}', False, 0, 2.0)
+            data = await (await self.client.get("/api/mqtt/topics")).json()
+            self.assertEqual(data["prefix"], "crawler/1/")
+            self.assertEqual([t["topic"] for t in data["topics"]], ["cmd/stop", "sensor/gamepad/state"])
+            msgs = await (await self.client.get("/api/mqtt/messages?topic=sensor")).json()
+            self.assertEqual([m["topic"] for m in msgs], ["sensor/gamepad/state"])
+            self.assertEqual((await self.client.get("/api/mqtt/messages?limit=x")).status, 400)
+            self.assertEqual((await self.client.get("/mqtt")).status, 200)
 
         async def test_stream_unavailable_without_vision(self):
             await self.login("gus")

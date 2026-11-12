@@ -29,6 +29,8 @@ class AuthTest(unittest.TestCase):
     def test_users(self):
         users = auth.Users({"anna": {"role": "admin", "password_hash": auth.hash_password("pw-anna-123")}})
         self.assertEqual(users.check("anna", "pw-anna-123"), "admin")
+        self.assertEqual(users.check(" Anna ", "pw-anna-123"), "admin")
+        self.assertIsNone(users.check("anna", "PW-anna-123"))
         self.assertIsNone(users.check("anna", "nope"))
         self.assertIsNone(users.check("bob", "pw-anna-123"))
         with self.assertRaises(ValueError):
@@ -105,6 +107,13 @@ class StoreAndStateTest(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["detail"], "such die Katze → Found cat. [litert-lm, 6.2 s]")
         self.assertIn("agent", [e for e, _ in self.pushed])
+
+    def test_display_frame_kept_and_pushed(self):
+        frame = {"w": 128, "h": 64, "data": "AAAA", "ts": 1.0}
+        self.state.on_message("display/frame", frame, retain=True)
+        self.assertEqual(self.state.display_frame, frame)
+        self.assertIn(("display", frame), self.pushed)
+        self.assertNotIn("display", self.state.snapshot)      # kept out of the status snapshot
 
     def test_status_snapshot_pushed_once_per_tick(self):
         self.state.on_message("status", {"status": "online"})
@@ -193,7 +202,7 @@ if __name__ == "__main__":
 class MetricsTest(unittest.TestCase):
 
     def test_meminfo(self):
-        from services.web.metrics import parse_meminfo
+        from services.common.metrics import parse_meminfo
         m = parse_meminfo("MemTotal:  8000000 kB\nMemFree:  1000 kB\nMemAvailable:  6000000 kB\n")
         self.assertEqual((m["total"], m["used"], m["percent"]), (8000000 * 1024, 2000000 * 1024, 25.0))
         self.assertIsNone(parse_meminfo("garbage"))
@@ -201,7 +210,7 @@ class MetricsTest(unittest.TestCase):
     def test_cpu_sampler(self):
         import os
         import tempfile
-        from services.web.metrics import CpuSampler
+        from services.common.metrics import CpuSampler
         with tempfile.NamedTemporaryFile("w", delete=False) as f:
             f.write("cpu  100 0 100 800 0 0 0 0 0 0\ncpu0 1 2 3\n")
         try:
@@ -212,3 +221,35 @@ class MetricsTest(unittest.TestCase):
             self.assertEqual(sampler.sample(), 50.0)
         finally:
             os.unlink(f.name)
+
+
+class MonitorTest(unittest.TestCase):
+
+    def test_records_stats_and_filters(self):
+        from services.web.monitor import MqttMonitor
+        pushed = []
+        m = MqttMonitor(pushed.append)
+        m.record("sensor/ultrasonic/distance", b'{"cm": 12}', False, 0, 1.0)
+        m.record("sensor/ultrasonic/status", b'{"status": "online"}', True, 1, 2.0)
+        m.record("cmd/stop", b"not json", False, 1, 3.0)
+        m.record("sensor/vision/raw", b"\xff\xfe", False, 0, 4.0)
+        self.assertEqual([t["topic"] for t in m.topic_list()],
+                         ["cmd/stop", "sensor/ultrasonic/distance", "sensor/ultrasonic/status", "sensor/vision/raw"])
+        self.assertEqual(len(pushed), 4)
+        self.assertEqual([x["topic"] for x in m.messages("sensor/ultrasonic")],
+                         ["sensor/ultrasonic/status", "sensor/ultrasonic/distance"])
+        self.assertEqual(len(m.messages("sensor/ultrasonic/status", subtree=False)), 1)
+        self.assertEqual(m.messages("sensor/ultra"), [])            # no partial name matches
+        stop = m.messages("cmd/stop")[0]
+        self.assertEqual((stop["json"], stop["payload"], stop["qos"]), (False, "not json", 1))
+        self.assertTrue(m.messages("sensor/ultrasonic/status")[0]["retain"])
+        self.assertIn("binary", m.messages("sensor/vision/raw")[0]["payload"])
+        m.clear()
+        self.assertEqual((m.topic_list(), m.messages()), ([], []))
+
+    def test_truncates_large_payloads(self):
+        from services.web.monitor import MAX_PAYLOAD, MqttMonitor
+        m = MqttMonitor()
+        msg = m.record("state/legs", b"x" * (MAX_PAYLOAD + 100), False, 0, 1.0)
+        self.assertLess(len(msg["payload"]), MAX_PAYLOAD + 50)
+        self.assertEqual(msg["size"], MAX_PAYLOAD + 100)

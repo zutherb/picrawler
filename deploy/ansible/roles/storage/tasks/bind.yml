@@ -1,0 +1,47 @@
+---
+# One directory: copy existing content once, then bind-mount it from the NVMe.
+- name: "Check whether already on the NVMe: {{ bind.path }}"
+  ansible.builtin.command: mountpoint -q {{ bind.path }}
+  register: storage_is_mounted
+  changed_when: false
+  failed_when: false
+
+- name: "Create the NVMe directory for {{ bind.path }}"
+  ansible.builtin.file:
+    path: "{{ storage_mount }}/{{ bind.name }}"
+    state: directory
+    mode: "0755"
+  when: storage_is_mounted.rc != 0
+
+- name: "Copy existing content of {{ bind.path }}"
+  ansible.builtin.shell: |
+    set -eu
+    src={{ bind.path }}
+    dst={{ storage_mount }}/{{ bind.name }}
+    if [ -d "$src" ] && [ -z "$(ls -A "$dst")" ] && [ -n "$(ls -A "$src")" ]; then
+      {% if bind.service is defined %}systemctl stop {{ bind.service }} || true{% endif %}
+
+      rsync -aHAX "$src"/ "$dst"/
+      echo copied
+    fi
+    # keep owner and mode of the original directory
+    if [ -d "$src" ]; then chown --reference="$src" "$dst"; chmod --reference="$src" "$dst"; fi
+  args:
+    executable: /bin/bash
+  register: storage_copy
+  changed_when: "'copied' in storage_copy.stdout"
+  when: storage_is_mounted.rc != 0
+
+- name: "Bind-mount from the NVMe: {{ bind.path }}"
+  ansible.posix.mount:
+    path: "{{ bind.path }}"
+    src: "{{ storage_mount }}/{{ bind.name }}"
+    fstype: none
+    opts: "bind,nofail,x-systemd.requires-mounts-for={{ storage_mount }}"
+    state: mounted
+
+- name: "Restart on the new data directory: {{ bind.service | default('') }}"
+  ansible.builtin.systemd_service:
+    name: "{{ bind.service }}"
+    state: restarted
+  when: bind.service is defined and storage_is_mounted.rc != 0

@@ -1,0 +1,157 @@
+---
+- name: Check for the NVMe device
+  ansible.builtin.stat:
+    path: "{{ storage_device }}"
+  register: storage_dev
+
+- name: Fail clearly when the NVMe is missing
+  ansible.builtin.assert:
+    that: storage_dev.stat.exists
+    fail_msg: >-
+      {{ storage_device }} not found (check lspci / dtparam=pciex1). Set
+      storage_enabled: false to run everything from the SD card.
+    quiet: true
+
+- name: Look for the data filesystem by label
+  ansible.builtin.command: blkid -L {{ storage_label }}
+  register: storage_by_label
+  changed_when: false
+  failed_when: false
+
+- name: Inspect the disk
+  ansible.builtin.command: lsblk -nro FSTYPE,PTTYPE {{ storage_device }}
+  register: storage_lsblk
+  changed_when: false
+  when: storage_by_label.rc != 0
+
+- name: Refuse to touch a disk that is in use
+  ansible.builtin.assert:
+    that: storage_lsblk.stdout | trim | length == 0
+    fail_msg: >-
+      {{ storage_device }} has a partition table or filesystem but no
+      '{{ storage_label }}' label. Not touching it. Label an existing ext4
+      partition with 'e2label <partition> {{ storage_label }}', or wipe the
+      disk yourself and set storage_allow_format: true.
+    quiet: true
+  when: storage_by_label.rc != 0
+
+- name: Require explicit permission to format
+  ansible.builtin.assert:
+    that: storage_allow_format | bool
+    fail_msg: >-
+      {{ storage_device }} is empty and needs formatting, which erases it.
+      Run again with -e storage_allow_format=true.
+    quiet: true
+  when: storage_by_label.rc != 0
+
+- name: Partition and format the NVMe
+  ansible.builtin.shell: |
+    set -euo pipefail
+    parted -s {{ storage_device }} mklabel gpt mkpart {{ storage_label }} ext4 0% 100%
+    udevadm settle
+    part=$(lsblk -nrpo NAME,TYPE {{ storage_device }} | awk '$2 == "part" {print $1; exit}')
+    mkfs.ext4 -q -L {{ storage_label }} "$part"
+    udevadm settle
+  args:
+    executable: /bin/bash
+  when: storage_by_label.rc != 0
+  changed_when: true
+
+- name: Mount the data filesystem
+  ansible.posix.mount:
+    path: "{{ storage_mount }}"
+    src: "LABEL={{ storage_label }}"
+    fstype: ext4
+    opts: defaults,noatime,nofail,x-systemd.device-timeout=10
+    state: mounted
+
+- name: Move directories to the NVMe
+  ansible.builtin.include_tasks: bind.yml
+  loop: "{{ storage_binds }}"
+  loop_control:
+    loop_var: bind
+    label: "{{ bind.path }}"
+
+- name: Fix owner and mode of the journal directory
+  ansible.builtin.command: systemd-tmpfiles --create --prefix /var/log/journal
+  changed_when: false
+
+- name: Create systemd drop-in directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/systemd/journald.conf.d
+    - /etc/systemd/system/dphys-swapfile.service.d
+
+- name: Keep the journal on disk, size-limited
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/picrawler.conf
+    content: |
+      # {{ ansible_managed }}
+      [Journal]
+      Storage=persistent
+      SystemMaxUse={{ storage_journal_max_use }}
+    owner: root
+    group: root
+    mode: "0644"
+  notify: [Restart journald, Flush journal to disk]
+
+- name: Check for dphys-swapfile
+  ansible.builtin.stat:
+    path: /etc/dphys-swapfile
+  register: storage_dphys
+
+- name: Put the swap file on the NVMe
+  ansible.builtin.lineinfile:
+    path: /etc/dphys-swapfile
+    regexp: "^#?\\s*{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+  loop:
+    - { key: CONF_SWAPFILE, value: "{{ storage_mount }}/swap" }
+    - { key: CONF_SWAPSIZE, value: "{{ storage_swap_mb }}" }
+    - { key: CONF_MAXSWAP, value: "{{ storage_swap_mb }}" }
+  loop_control:
+    label: "{{ item.key }}"
+  when: storage_dphys.stat.exists and storage_swap_mb | int > 0
+  notify: Recreate the swap file
+
+- name: Swap file waits for the NVMe at boot
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/dphys-swapfile.service.d/picrawler.conf
+    content: |
+      # {{ ansible_managed }}
+      [Unit]
+      RequiresMountsFor={{ storage_mount }}
+    owner: root
+    group: root
+    mode: "0644"
+  when: storage_dphys.stat.exists and storage_swap_mb | int > 0
+  notify: Reload systemd
+
+- name: Use RAM for /tmp
+  ansible.builtin.copy:
+    src: /usr/share/systemd/tmp.mount
+    dest: /etc/systemd/system/tmp.mount
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  when: storage_tmp_in_ram | bool
+  notify: Reload systemd
+
+- name: Enable /tmp in RAM (active after the next reboot)
+  ansible.builtin.systemd_service:
+    name: tmp.mount
+    enabled: true
+    daemon_reload: true
+  when: storage_tmp_in_ram | bool
+
+- name: Trim the NVMe weekly
+  ansible.builtin.systemd_service:
+    name: fstrim.timer
+    enabled: true
+    state: started

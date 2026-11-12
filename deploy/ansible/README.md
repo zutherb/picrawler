@@ -5,6 +5,7 @@ Sets up a Raspberry Pi (Raspberry Pi OS Bookworm) for the PiCrawler:
 | Role | What it does |
 |---|---|
 | `base` | apt packages, enables I2C (reboots if needed), system user `picrawler` in `i2c`/`gpio` |
+| `storage` | NVMe as data disk: code, venv, models, logs, journal, Mosquitto data, apt cache and swap move there; `/tmp` in RAM. The system stays on the SD card (no NVMe boot behind the HatDrive! AI switch) |
 | `mosquitto` | broker with login only, hashed passwords, ACLs as in `docs/target-architecture.md` |
 | `picrawler` | code to `/opt/picrawler/src`, venv, `robot_hat`, configs in `/etc/picrawler`, systemd units + `picrawler.target`, Coral test model, web TLS certificate, polkit rule for the web user |
 
@@ -20,6 +21,19 @@ ansible-vault encrypt inventory/group_vars/picrawler/vault.yml
 ```
 
 `hosts.yml` and `vault.yml` are excluded via `.gitignore`.
+
+## First run with an empty NVMe
+
+The storage role refuses to format without permission. The first time:
+
+```bash
+ansible-playbook site.yml --ask-vault-pass -e storage_allow_format=true
+```
+
+It only formats a disk with no partition table and no filesystem; a disk
+with data but without the `picrawler-data` label is left alone. Existing
+directories on the SD card are copied to the NVMe once. Without NVMe set
+`storage_enabled: false`. `/tmp` in RAM takes effect after the next reboot.
 
 ## Running
 
@@ -62,6 +76,12 @@ sudo systemctl stop picrawler.target
 | `mosquitto_listen_address` | `127.0.0.1` | non-local only with `mosquitto_allow_plaintext_remote: true` (no TLS yet) |
 | `picrawler_robot_hat_version` | `2.5.x` | pin to a commit SHA for reproducible installs |
 | `base_reboot_allowed` | `true` | automatic reboot after enabling I2C |
+| `picrawler_splash_dir` | `/usr/local/lib/picrawler` | boot splash script and picture (on the SD card) |
+| `picrawler_display_enabled` | `true` | OLED status display; `picrawler_display_driver` `ssd1306` (0.96") or `sh1106` (most 1.3"), address `0x3C` |
+| `picrawler_battery_low_v` / `_critical_v` | `7.0` / `6.6` | 2S Li-ion: warn / sit down and refuse motion |
+| `storage_enabled` | `true` | use the NVMe (`storage_device`, default `/dev/nvme0n1`) |
+| `storage_allow_format` | `false` | allow formatting an empty NVMe (erases it) |
+| `storage_swap_mb` | `2048` | swap file on the NVMe; 0 leaves swap alone |
 
 ## Notes
 

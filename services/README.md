@@ -11,10 +11,11 @@ this (units from `deploy/ansible`). Background: `docs/target-architecture.md`.
 | `services.sensor_ultrasonic` | measures and publishes the distance | `sensor-ultrasonic` |
 | `services.sensor_gamepad` | reads any Bluetooth/USB gamepad via evdev, publishes stick and buttons | `sensor-gamepad` |
 | `services.vision` | camera, MJPEG stream on 127.0.0.1:8081, object detection on the Coral | `sensor-vision` |
-| `services.web` | login, live video with boxes, object log, emergency stop, agent input, admin (Bluetooth, vision mode, services, metrics) | `ui` |
+| `services.web` | login, live video with boxes, object log, emergency stop, agent input, admin (Bluetooth, vision mode, services, metrics), MQTT debug page | `ui` |
 | `services.sensor_speech` | USB microphone, voice activity detection, whisper.cpp → text | `sensor-speech` |
 | `services.agent` | offline language model (Gemma 4 E2B via LiteRT-LM) with robot tools; keyword parser as fallback | `agent` |
 | `services.voice` | speaks the agent's replies with Piper | `voice` |
+| `services.display` | 128x64 I2C OLED: Wi-Fi, IP/temperature, Bluetooth, bars for battery, CPU, RAM, SD, NVMe | `display` (battery only) |
 | `services.common` | config, MQTT connection, message validation | – |
 
 The logic of each service lives in a class without networking
@@ -68,6 +69,10 @@ python3 -m services.web.hashpw
 
 Roles: `viewer` sees video and log and may press STOP, `admin` additionally
 gets the admin page. `Esc` on any page also sends a stop.
+
+Remote control: the "Remote" page (admin) has a joystick, WASD/arrow keys,
+action buttons and a speed slider, and also takes a gamepad plugged into
+the computer you browse from. It only moves while you hold a control.
 
 Pairing a controller: Admin → "Search", put the pad into pairing mode,
 "Pair". The "Gamepad input" panel shows the button names for
@@ -128,6 +133,7 @@ python3 -m services.web --config web-dev.toml --fake    # web.toml plus the [mqt
 python3 -m services.sensor_speech --config /tmp/dev.toml --fake   # scripted phrases
 python3 -m services.agent --config /tmp/dev.toml --fake           # keyword parser only
 python3 -m services.voice --config /tmp/dev.toml --fake           # prints instead of speaking
+python3 -m services.display --config /tmp/dev.toml --fake         # writes /tmp/picrawler-display.png (needs Pillow)
 ```
 
 `--fake` replaces hardware: servo stand-in, a distance swinging between 10
@@ -144,6 +150,7 @@ they run alone. Requires `paho-mqtt>=2`, plus `aiohttp` for the web UI.
   content. Afterwards, lower priorities are locked out for 1 s.
 - Connection to the broker lost → stop, sit down after 5 s.
 - `SIGTERM`/`Ctrl+C` → sit down, `status` = `offline`.
+- Battery below 6.6 V for 20 s → sit down, motion refused until charged.
 - The obstacle stop only fires while walking forward (`when_motion`), so the
   crawler can turn or back away from a wall.
 - The gamepad has precedence over wander, never over the safety stop.

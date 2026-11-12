@@ -1,0 +1,28 @@
+---
+# Put everything that writes or is large on the NVMe; the SD card keeps only
+# the system (/, /boot, /etc, /usr). Booting from the NVMe behind the
+# HatDrive! AI's PCIe switch is not possible, so the SD card stays.
+storage_enabled: true
+storage_device: /dev/nvme0n1
+storage_label: picrawler-data
+storage_mount: /mnt/picrawler-data
+
+# Formatting erases the disk. Only done when the disk has no partition
+# table and no filesystem AND this is true.
+storage_allow_format: false
+
+# Directories moved to the NVMe (bind mounts). Existing content is copied
+# over on the first run. `service` is stopped while its data is copied.
+storage_binds:
+  - { path: /opt/picrawler, name: opt-picrawler }
+  - { path: /var/lib/picrawler, name: picrawler }
+  - { path: /var/lib/picrawler-web, name: picrawler-web }
+  - { path: /var/lib/mosquitto, name: mosquitto, service: mosquitto }
+  - { path: /var/log/journal, name: journal }
+  - { path: /var/cache/apt/archives, name: apt-archives }
+
+# Swap file on the NVMe instead of the SD card (dphys-swapfile). 0 = leave as is.
+storage_swap_mb: 2048
+# /tmp as tmpfs in RAM (takes effect after the next reboot)
+storage_tmp_in_ram: true
+storage_journal_max_use: 500M

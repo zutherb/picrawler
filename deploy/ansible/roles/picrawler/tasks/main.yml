@@ -62,6 +62,12 @@
     name: "{{ picrawler_pip_packages }}"
     virtualenv: "{{ picrawler_venv }}"
 
+- name: Install display python dependencies
+  ansible.builtin.pip:
+    name: "{{ picrawler_display_pip_packages }}"
+    virtualenv: "{{ picrawler_venv }}"
+  when: picrawler_display_enabled | bool
+
 - name: Install agent python dependencies
   ansible.builtin.pip:
     name: "{{ picrawler_agent_pip_packages }}"
@@ -96,6 +102,20 @@
   loop_control:
     label: "{{ item.dest }}"
   notify: Restart picrawler
+
+- name: Write display config
+  ansible.builtin.template:
+    src: display.toml.j2
+    dest: "{{ picrawler_config_dir }}/display.toml"
+    owner: root
+    group: "{{ picrawler_user }}"
+    mode: "0640"
+  when: picrawler_display_enabled | bool
+  notify: Restart picrawler
+
+- name: Set up the OLED boot splash
+  ansible.builtin.include_tasks: splash.yml
+  when: picrawler_display_enabled | bool
 
 - name: Write voice stack configs
   ansible.builtin.template:

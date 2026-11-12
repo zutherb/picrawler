@@ -32,7 +32,7 @@ const PC = {
 
   connect() {
     const source = new EventSource("/events");
-    for (const event of ["status", "history", "detections", "log", "gamepad", "bluetooth", "agent"]) {
+    for (const event of ["status", "history", "detections", "log", "gamepad", "bluetooth", "agent", "display"]) {
       source.addEventListener(event, (e) => {
         const data = JSON.parse(e.data);
         for (const fn of PC.handlers[event] || []) fn(data);
@@ -44,19 +44,49 @@ const PC = {
 
   setLink(ok) {
     const el = document.getElementById("link");
-    if (el) el.className = "dot " + (ok ? "ok" : "bad");
+    if (el) {
+      el.className = "live-dot " + (ok ? "ok" : "bad");
+      el.title = ok ? "live connection" : "connection lost";
+    }
+  },
+
+  // Light/dark like bernd-zuther.de: explicit choice wins over the system.
+  toggleTheme() {
+    const root = document.documentElement;
+    const dark = root.dataset.theme ? root.dataset.theme === "dark"
+                                    : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("picrawler-theme", root.dataset.theme); } catch (err) { /* ignore */ }
+    PC.updateThemeButton();
+  },
+
+  updateThemeButton() {
+    const button = document.getElementById("theme");
+    if (!button) return;
+    const root = document.documentElement;
+    const dark = root.dataset.theme ? root.dataset.theme === "dark"
+                                    : matchMedia("(prefers-color-scheme: dark)").matches;
+    button.textContent = dark ? "☾" : "☀";
+    button.title = dark ? "Switch to light mode" : "Switch to dark mode";
   },
 
   header(page) {
     const header = document.createElement("header");
     header.innerHTML = `
-      <span class="brand"><span id="link" class="dot"></span>PiCrawler</span>
+      <a class="brand" href="/">
+        <img class="brand-mark" src="/static/logo-mark.svg" alt="">
+        <span class="name">PiCrawler<span class="sub"><span id="link" class="live-dot"></span>picrawler@robot:~</span></span>
+      </a>
       <nav>
         <a href="/" data-page="live">Live</a>
         <a href="/log" data-page="log">Log</a>
+        <a href="/remote" data-page="remote" class="admin-only">Remote</a>
         <a href="/admin" data-page="admin" class="admin-only">Admin</a>
+        <a href="/mqtt" data-page="mqtt" class="admin-only">MQTT</a>
       </nav>
+      <span class="battery hidden" id="battery"></span>
       <span class="user"></span>
+      <button id="theme" class="theme-toggle">☀</button>
       <button id="logout">Log out</button>
       <button class="stop" id="stop" title="Stop all motion now">STOP</button>`;
     document.body.prepend(header);
@@ -66,16 +96,56 @@ const PC = {
       if (a.classList.contains("admin-only") && PC.me.role !== "admin") a.remove();
     }
     header.querySelector("#stop").addEventListener("click", () => PC.stop(false));
+    header.querySelector("#theme").addEventListener("click", PC.toggleTheme);
+    PC.on("status", (s) => PC.showBattery(s.battery));
+    PC.updateThemeButton();
     header.querySelector("#logout").addEventListener("click", async () => {
       await PC.api("POST", "/logout");
       location.href = "/login";
     });
     document.addEventListener("keydown", (e) => {
-      // Escape anywhere = emergency stop, unless typing in a field
-      if (e.key === "Escape" && !["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) {
+      // Escape anywhere = emergency stop, unless typing in a field or closing
+      // a dialog (dialogs have their own STOP button)
+      if (e.key === "Escape" && !document.querySelector("dialog[open]") &&
+          !["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) {
         PC.stop(false);
       }
     });
+  },
+
+  // Battery pill in the header, on every page.
+  showBattery(b) {
+    const el = document.getElementById("battery");
+    if (!el) return;
+    if (!b || !b.present) { el.classList.add("hidden"); return; }
+    el.classList.remove("hidden");
+    el.className = "battery " + (b.level || "ok");
+    el.textContent = "";
+    const fill = PC.el("span", { class: "battery-fill" });
+    fill.style.width = `${Math.max(0, Math.min(100, b.percent))}%`;
+    el.append(PC.el("span", { class: "battery-icon" }, fill), `${b.percent}%`);
+    el.title = `${b.voltage.toFixed(2)} V, ${b.level}`;
+  },
+
+  // OLED mirror: 1-bit frame (8 px per byte, MSB = leftmost, 1 = lit).
+  drawOled(canvas, frame) {
+    const ctx = canvas.getContext("2d");
+    const bytes = Uint8Array.from(atob(frame.data), (c) => c.charCodeAt(0));
+    const image = ctx.createImageData(frame.w, frame.h);
+    const rowBytes = Math.ceil(frame.w / 8);
+    for (let y = 0; y < frame.h; y++) {
+      for (let x = 0; x < frame.w; x++) {
+        const lit = bytes[y * rowBytes + (x >> 3)] & (0x80 >> (x & 7));
+        const i = (y * frame.w + x) * 4;
+        image.data[i] = lit ? 232 : 6;
+        image.data[i + 1] = lit ? 246 : 8;
+        image.data[i + 2] = lit ? 255 : 18;
+        image.data[i + 3] = 255;
+      }
+    }
+    canvas.width = frame.w;
+    canvas.height = frame.h;
+    ctx.putImageData(image, 0, 0);
   },
 
   async stop(sit) {
@@ -108,7 +178,7 @@ const PC = {
   // "person 14:02:10–14:02:31 · 2× · 0.91" / "stop 14:03:00 · obstacle"
   describe(row) {
     if (row.kind === "sighting") {
-      const span = row.end ? `${PC.time(row.start)}–${PC.time(row.end)}` : `${PC.time(row.start)}– now`;
+      const span = row.end ? `${PC.time(row.start)} – ${PC.time(row.end)}` : `${PC.time(row.start)} – now`;
       const count = row.max_count > 1 ? ` · ${row.max_count}×` : "";
       return { title: row.label, text: `${span}${count} · ${Number(row.max_score).toFixed(2)}` };
     }

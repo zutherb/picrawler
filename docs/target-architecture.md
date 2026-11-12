@@ -186,9 +186,13 @@ JSON in UTF-8 and contain `ts` (Unix time in seconds, float).
 | `event/watchdog` | Body → | 1 | no |
 | `arbiter/status` | Arbiter → | 1 | yes (LWT `offline`) |
 | `event/stop` | Body → | 1 | no (`{"reason", "sit"}`, for the object log) |
+| `state/battery` | Body → | 1 | yes (`{"present", "voltage", "percent", "level"}`, every 5 s) |
+| `event/battery` | Body → | 1 | no (level changes) |
 | `sensor/gamepad/state` | gamepad → | 0 | no (`{"x", "y", "buttons"}`, x/y in −1..1, up is negative) |
 | `sensor/gamepad/status` | gamepad → | 1 | yes (LWT `offline`, plus `connected`, `name`) |
 | `web/status` | web → | 1 | yes (LWT `offline`) |
+| `display/frame` | display → web | 0 | yes (`{"w", "h", "data"}`, 1-bit pixels base64, only when the picture changes) |
+| `remote/state` | web → arbiter | 0 | no (`{"x", "y", "speed"?, "action"?, "user"}`, while a remote control is held) |
 
 The body only accepts GOAL commands if a `cmd/heartbeat` arrived in the last
 second. Otherwise the watchdog would abort them immediately anyway.
@@ -422,6 +426,8 @@ Browser ──HTTP──► web-service :8080 ─┬─ /stream.mjpg ──► v
 | **Live** | viewer | Video, drawn boxes (toggleable), status bar (vision online/TPU/FPS/inference time, body status, gamepad connected), **emergency stop button** (always visible), live log of the latest events |
 | **Log** | viewer | Object log with filter (label, time range, minimum score), CSV export |
 | **Admin** | admin | Bluetooth controller, vision mode, services, system |
+| **Remote** | admin | Remote control: video, virtual joystick (mouse/touch), WASD/arrow keys, a gamepad on the viewing computer (browser Gamepad API), action buttons, speed slider, big STOP. Sends stick facts on `remote/state` while a control is held |
+| **MQTT** | admin | Debug view: topic tree of everything under `crawler/<id>/` (counts, retained marker, live flash) on the left, messages of the selected topic or subtree on the right (time with ms, QoS, size, JSON formatted), filter, pause, clear. Read-only, no publishing |
 
 The browser draws the boxes onto a canvas over the video, using the data
 from `sensor/vision/detections`. This keeps the stream unchanged, and no
@@ -477,8 +483,8 @@ latest log lines from the journal.
 **System**: CPU usage, load, memory, disk, CPU temperature, throttling
 (`vcgencmd get_throttled`), memory per service (systemd `MemoryCurrent`),
 refreshed every 2 s; shutdown and reboot (with confirmation dialog).
-Shutdown makes the crawler sit down first. Battery voltage: not available
-from the Robot HAT yet.
+Shutdown makes the crawler sit down first. The battery is shown in the
+header of every page and as a tile on the live page.
 
 **Metrics history**: no Prometheus on the Pi (RAM and SD card writes for a
 single robot). The admin page reads `/proc` directly. For history over days,
@@ -502,7 +508,9 @@ another machine that scrapes it.
   - A **polkit rule** that allows exactly restart/status of the
     `picrawler-*` units as well as shutdown/reboot of the system.
     No `sudo`, no shell commands with input from the browser.
-  - MQTT user `ui` (ACL already exists in Ansible).
+  - MQTT user `ui`: reads everything under the robot's prefix (for the MQTT
+    debug page), writes only `cmd/action`, `cmd/stop`, `cmd/heartbeat`,
+    `vision/mode`, `agent/ask` and its own status.
 - Failed logins are rate-limited (e.g. 5 attempts per minute
   per IP).
 
@@ -547,6 +555,11 @@ safety layer.
   joystick/gamepad buttons (deliberately loose, generic Bluetooth pads often
   report `BTN_TRIGGER`/`BTN_THUMB` instead of `BTN_SOUTH`). `device_name`
   narrows it down. It publishes facts only.
+- The web remote page (section 8.2) is a second source on `remote/state`
+  with the same stick convention plus an optional one-shot `action` and a
+  `speed`. The freshest source drives. A source silent for 1 s counts as
+  centered, so a closed browser tab stops the crawler after the current
+  step (dead man).
 - The arbiter's `Manual` behaviour turns them into goal commands, one at a
   time while the body is idle: stick up/down → `forward`/`backward`,
   left/right → `turn left`/`turn right` (threshold 0.5), button edges →
@@ -673,13 +686,74 @@ actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wa
 
 - **Raspberry Pi 5, 8 GB.** No H.264 hardware encoder, hence MJPEG for
   the stream (section 7).
-- **Coral Edge TPU as M.2 card over PCIe.** Requires a 4K-page kernel,
-  `dtparam=pciex1`, gasket driver and a udev rule (group `apex`). The
-  user `picrawler` needs the group `apex`. Setup and measurements:
-  `spikes/coral/README.md`.
+- **Pineboards HatDrive! AI**: M.2 NVMe (2230/2242) plus an M.2 E-key
+  slot for the Coral, behind an ASMedia PCIe Gen 2 switch on the Pi's
+  single lane.
+  - **Coral Dual Edge TPU** in the E-key slot. Each of its two TPUs needs
+    its own PCIe lane; the HatDrive passes one, so expect **one usable TPU**
+    (`/dev/apex_0`). One is plenty here (~10 ms per frame at ≤ 10 Hz).
+    Using both would need the Hat AI! Dual (no NVMe).
+  - Coral setup: 4K-page kernel, `dtparam=pciex1`, gasket driver, udev rule
+    (group `apex`, the user `picrawler` is in it). See `spikes/coral/`.
+  - **No booting from the NVMe** behind the switch: the system stays on the
+    SD card. The `storage` Ansible role moves everything that writes or is
+    large to the NVMe: `/opt/picrawler` (code, venv, whisper.cpp, Piper),
+    `/var/lib/picrawler` (models, calibration, agent cache),
+    `/var/lib/picrawler-web` (log database), the journal, Mosquitto data,
+    the apt cache and the swap file; `/tmp` goes to RAM. The SD card keeps
+    `/`, `/boot`, `/etc`, `/usr`. Robot units have `RequiresMountsFor`, so
+    without the NVMe they do not start instead of writing to the SD card.
+  - Next step if power cuts become a problem: read-only root on the SD card
+    (overlay), now possible because nothing robot-related writes there.
 - **Original PiCrawler camera module** via the Pi 5 adapter cable
   (22-pin to 15-pin), accessed via libcamera/`picamera2`.
-- Open: whether the M.2 board and Robot HAT fit together mechanically.
+- **Battery**: two Li-ion cells in series (2S, 6.0-8.4 V) on the Robot HAT,
+  measured on ADC A4 through a 20k/10k divider (V = A4/4095 x 3.3 x 3;
+  `get_battery_voltage()` is avoided, it is broken in some robot_hat
+  versions). The **body service** reads it every 5 s while holding the same
+  lock the executor holds for servo frames, because both talk to the HAT's
+  microcontroller over I2C and must not interleave. It publishes
+  `state/battery` (median of the last readings, charge from a 2S Li-ion
+  curve). Levels change only after holding 20 s, so the sag while walking
+  does not count: `low` below 7.0 V (warning), `critical` below 6.6 V (sit
+  down, refuse motion commands except stop). Charge percentages are rough;
+  check the voltage against a multimeter once.
+- **OLED status display**: AZDelivery 0.96" 128x64, SSD1306, I2C address
+  0x3C, on the Robot HAT's I2C bus (no conflict with the HAT at 0x14).
+  `services.display` reads `/proc` and `/sys` only (no MQTT, so it also helps
+  when everything else is down): header with Wi-Fi bars, the full IP
+  alternating every 3 s with the CPU temperature (kept on screen from 75 °C,
+  marked HOT) and a Bluetooth icon (crossed out = off/no adapter, plain = on,
+  inverted = device connected; from `/sys/class/bluetooth` and rfkill);
+  below, bars for CPU (all cores), RAM, SD card and NVMe (when mounted).
+  With MQTT (user `display`, reads only `state/battery`) a battery bar comes
+  first; a critical battery keeps "BATTERY LOW" on screen. When the NVMe
+  is mounted, SD card and NVMe share the last row as two half bars.
+  Thresholds (`picrawler_display_thresholds`, default CPU 80/95 %, RAM
+  80/92 %, storage 80/95 %, battery 20/5 % or the body's low/critical
+  level, temperature 70/80 °C) show as icons because the display has no
+  colors: no icon = ok, outlined warning triangle = warning, triangle
+  flashing filled/outlined = critical; the temperature is inverted from the
+  warning level and flashes when critical.
+- **Boot and shutdown splash**: the robot from the project artwork
+  (1 bit, white shell lit, blue parts dithered, 50 px high, centered) with
+  a blinking state icon below it, ↻ while booting and ⏻ while shutting
+  down. A standard-library-only script on the SD card
+  (`/usr/local/lib/picrawler/oled-splash.py`) writes pre-rendered frames
+  (icon on / off, rendered by Ansible with `services.display.splash`)
+  straight to `/dev/i2c-1`:
+  - `picrawler-splash.service` starts right after the i2c-dev module loads
+    (`DefaultDependencies=no`, before `sysinit.target`), long before the
+    NVMe and the robot services, and blinks until the display service
+    starts (`Conflicts=`) or for 3 minutes at most.
+  - `picrawler-splash-shutdown.service` starts at halt/poweroff/reboot once
+    the display service has stopped and blinks until systemd terminates it
+    at the very end; it leaves the icon on. The OLED keeps its picture
+    while powered, so on a reboot the logo stays visible throughout.
+  - A missing display never fails the boot. Bootloader and the first kernel
+    seconds cannot be shown without a kernel framebuffer driver; not done.
+- Open: whether the HatDrive! AI and the Robot HAT fit together
+  mechanically, and the extra power draw of the NVMe on battery.
 
 ## 13. Open questions
 

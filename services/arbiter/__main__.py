@@ -25,7 +25,7 @@ def main():
         with lock:
             arbiter.on_message(suffix, payload, retain)
 
-    for topic in ("sensor/#", "state/motion", "status", "event/rejected", "agent/status"):
+    for topic in ("sensor/#", "state/motion", "status", "event/rejected", "agent/status", "remote/state"):
         bus.subscribe(topic)
     bus.on_message = on_message
     bus.on_connect = lambda: bus.publish_status("online")

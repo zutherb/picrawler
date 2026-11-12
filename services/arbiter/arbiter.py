@@ -122,6 +122,10 @@ class Arbiter:
         if suffix == "agent/status":
             self.agent_busy = isinstance(payload, dict) and payload.get("status") == "online" and bool(payload.get("busy"))
             return
+        if suffix == self.manual.remote_topic:
+            if not retain:
+                self.manual.on_reading(suffix, payload)
+            return
         sensor = sensor_of(suffix)
         if sensor is None:
             return
@@ -239,46 +243,75 @@ class Behavior:
 
 
 class Manual(Behavior):
-    """Gamepad control: stick walks and turns, buttons trigger actions.
+    """Manual control: the Bluetooth gamepad and the web remote.
 
-    Active while the gamepad has been used within hold_s; during that time
-    wander pauses. Commands are plain goals, so the safety stop still wins.
+    Both publish stick facts ({"x", "y"} in -1..1, up is negative): the pad
+    on sensor/gamepad/state with button names, the web remote on
+    remote/state with an optional one-shot "action" and a "speed". The
+    freshest source drives; a source that has been silent for INPUT_STALE_S
+    counts as centered (dead man: a closed browser tab stops the robot after
+    the current step). Active while used within hold_s; wander pauses
+    meanwhile. Commands are plain goals, so the safety stop still wins.
     """
 
     DEFAULT_BUTTONS = {"BTN_SOUTH": "stand", "BTN_EAST": "sit", "BTN_NORTH": "wave"}
+    REMOTE_ACTIONS = ("stand", "sit", "wave", "dance", "push up", "look left", "look right", "look up", "look down")
+    INPUT_STALE_S = 1.0
 
     def __init__(self, arbiter, cfg):
         super().__init__(arbiter)
         self.enabled = cfg.get("enabled", True)
         self.topic = cfg.get("topic", "sensor/gamepad/state")
-        self.sensor = sensor_of(self.topic)
+        self.remote_topic = cfg.get("remote_topic", "remote/state")
         self.speed = cfg.get("speed", 70)
         self.threshold = cfg.get("threshold", 0.5)
         self.hold_s = cfg.get("hold_s", 3.0)
         self.buttons = dict(cfg.get("buttons", self.DEFAULT_BUTTONS))
         self.stop_button = cfg.get("stop_button", "BTN_SELECT")
-        self.stick = (0.0, 0.0)
+        self.inputs = {}                  # topic -> (x, y, speed or None, mono time)
         self.pressed = set()
         self.queued_button = None
         self.last_input = None
 
+    def _fresh_input(self):
+        now = self.arbiter._mono()
+        fresh = [i for i in self.inputs.values() if now - i[3] <= self.INPUT_STALE_S]
+        return max(fresh, key=lambda i: i[3]) if fresh else None
+
+    @property
+    def stick(self):
+        current = self._fresh_input()
+        return (current[0], current[1]) if current else (0.0, 0.0)
+
     def active(self):
-        a = self.arbiter
-        return (self.enabled and self.last_input is not None and a.sensor_fresh(self.sensor)
-                and a._mono() - self.last_input <= self.hold_s)
+        return (self.enabled and self.last_input is not None and self._fresh_input() is not None
+                and self.arbiter._mono() - self.last_input <= self.hold_s)
 
     def on_reading(self, suffix, payload):
-        if not self.enabled or suffix != self.topic or not isinstance(payload, dict):
+        if not self.enabled or suffix not in (self.topic, self.remote_topic) or not isinstance(payload, dict):
             return
         x, y = payload.get("x", 0.0), payload.get("y", 0.0)
         if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (x, y)):
             return
+        x, y = max(-1.0, min(1.0, x)), max(-1.0, min(1.0, y))
+        now = self.arbiter._mono()
+        speed = payload.get("speed")
+        speed = int(speed) if isinstance(speed, int) and not isinstance(speed, bool) and 1 <= speed <= 100 else None
+        self.inputs[suffix] = (x, y, speed, now)
+        moving = max(abs(x), abs(y)) >= self.threshold
+        if suffix == self.remote_topic:
+            action = payload.get("action")
+            if action in self.REMOTE_ACTIONS:
+                self.queued_button = action
+            if moving or action:
+                self.last_input = now
+            return
         buttons = payload.get("buttons", [])
         pressed = {b for b in buttons if isinstance(b, str)} if isinstance(buttons, list) else set()
         new = pressed - self.pressed
-        self.stick, self.pressed = (x, y), pressed
-        if max(abs(x), abs(y)) >= self.threshold or pressed:
-            self.last_input = self.arbiter._mono()
+        self.pressed = pressed
+        if moving or pressed:
+            self.last_input = now
         if self.stop_button in new:
             self.queued_button = None
             self.arbiter.send_stop(reason="gamepad")
@@ -302,7 +335,8 @@ class Manual(Behavior):
         if name is None:
             return
         self.queued_button = None
-        self.send(name, self.speed)
+        current = self._fresh_input()
+        self.send(name, current[2] if current and current[2] else self.speed)
 
 
 class Wander(Behavior):

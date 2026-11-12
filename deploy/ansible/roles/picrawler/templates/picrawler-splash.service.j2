@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+# Logo on the OLED early in the boot, before the NVMe and the venv exist.
+# The state icon blinks until the display service starts (Conflicts= there
+# stops this unit) or after 3 minutes at the latest.
+[Unit]
+Description=PiCrawler OLED boot splash
+DefaultDependencies=no
+After=systemd-modules-load.service
+Before=sysinit.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 {{ picrawler_splash_dir }}/oled-splash.py {{ picrawler_splash_dir }}/splash-boot.bin --driver {{ picrawler_display_driver }} --address {{ picrawler_display_address }} --max-seconds 180
+TimeoutStopSec=3
+NoNewPrivileges=true
+PrivateNetwork=true
+ProtectHome=true
+
+[Install]
+WantedBy=sysinit.target

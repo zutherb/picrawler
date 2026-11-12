@@ -1,0 +1,21 @@
+# {{ ansible_managed }}
+# /proc and /sys directly; MQTT only for the battery (state/battery).
+{% set mqtt_user = 'display' %}
+{% include '_mqtt.toml.j2' %}
+
+[display]
+driver = "{{ picrawler_display_driver }}"
+bus = 1
+address = "{{ picrawler_display_address }}"
+rotate = {{ picrawler_display_rotate }}
+contrast = {{ picrawler_display_contrast }}
+interval_s = 1.0
+wifi_interface = ""          # empty: first wireless interface
+nvme_path = "{{ storage_mount | default('/mnt/picrawler-data') }}"
+
+# [warning, critical] per value; battery is remaining charge (low is bad).
+# Shown as icons: none = ok, outlined triangle = warning, flashing = critical.
+[display.thresholds]
+{% for key, pair in picrawler_display_thresholds.items() %}
+{{ key }} = {{ pair | to_json }}
+{% endfor %}

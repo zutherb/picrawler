@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="PiCrawler">
+  <defs>
+    <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.75" stop-color="#EEF1F8"/>
+      <stop offset="1" stop-color="#D9DEEB"/>
+    </linearGradient>
+    <linearGradient id="ear" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3D8BFF"/>
+      <stop offset="1" stop-color="#2557C7"/>
+    </linearGradient>
+    <linearGradient id="visor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#14123A"/>
+      <stop offset="1" stop-color="#080720"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="100" cy="189" rx="46" ry="5" fill="#000" opacity="0.18"/>
+
+  <!-- back legs -->
+  <g stroke-linecap="round">
+    <path d="M90 152 L84 182" stroke="#C9CFDF" stroke-width="9"/>
+    <path d="M110 152 L116 182" stroke="#C9CFDF" stroke-width="9"/>
+    <path d="M84 180 L83 186" stroke="#1B1F3A" stroke-width="5"/>
+    <path d="M116 180 L117 186" stroke="#1B1F3A" stroke-width="5"/>
+  </g>
+
+  <!-- body -->
+  <ellipse cx="100" cy="148" rx="31" ry="29" fill="url(#shell)" stroke="#C3CADB" stroke-width="1.2"/>
+  <ellipse cx="72" cy="132" rx="7" ry="5" fill="#25305A" transform="rotate(-30 72 132)"/>
+  <ellipse cx="128" cy="132" rx="7" ry="5" fill="#25305A" transform="rotate(30 128 132)"/>
+  <circle cx="100" cy="140" r="8" fill="#2F4F95"/>
+  <circle cx="100" cy="140" r="5.5" fill="#0F1027"/>
+  <circle cx="98" cy="138" r="1.6" fill="#FFFFFF" opacity="0.8"/>
+
+  <!-- front legs -->
+  <g stroke-linecap="round">
+    <path d="M76 150 L58 184" stroke="url(#shell)" stroke-width="11"/>
+    <path d="M124 150 L142 184" stroke="url(#shell)" stroke-width="11"/>
+    <path d="M59 182 L56 189" stroke="#1B1F3A" stroke-width="6"/>
+    <path d="M141 182 L144 189" stroke="#1B1F3A" stroke-width="6"/>
+  </g>
+  <circle cx="76" cy="150" r="7" fill="url(#ear)"/>
+  <circle cx="124" cy="150" r="7" fill="url(#ear)"/>
+
+  <!-- antenna -->
+  <path d="M126 44 L136 24" stroke="#C3CADB" stroke-width="6" stroke-linecap="round"/>
+  <path d="M126 44 L136 24" stroke="#F4F6FB" stroke-width="3.6" stroke-linecap="round"/>
+  <circle cx="138" cy="20" r="7.5" fill="#FFFFFF" stroke="#C3CADB" stroke-width="1.2"/>
+
+  <!-- ears -->
+  <rect x="35" y="64" width="20" height="40" rx="10" fill="url(#ear)"/>
+  <rect x="145" y="64" width="20" height="40" rx="10" fill="url(#ear)"/>
+
+  <!-- head -->
+  <rect x="44" y="36" width="112" height="90" rx="42" fill="url(#shell)" stroke="#C3CADB" stroke-width="1.2"/>
+
+  <!-- visor with eyes -->
+  <rect x="58" y="54" width="84" height="54" rx="22" fill="url(#visor)"/>
+  <g fill="none" stroke="#30D5C0" stroke-width="4.6" filter="url(#glow)">
+    <circle cx="83" cy="79" r="10.5"/>
+    <circle cx="117" cy="79" r="10.5"/>
+  </g>
+  <ellipse cx="72" cy="94" rx="5" ry="3.2" fill="#FF8C8C" opacity="0.9"/>
+  <ellipse cx="128" cy="94" rx="5" ry="3.2" fill="#FF8C8C" opacity="0.9"/>
+</svg>

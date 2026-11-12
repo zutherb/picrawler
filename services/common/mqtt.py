@@ -30,6 +30,7 @@ class Bus:
         self._port = int(mqtt_cfg.get("port", 1883))
 
         self.on_message = None      # fn(suffix, payload_dict, retain)
+        self.on_raw = None          # fn(suffix, payload_bytes, retain, qos), e.g. for a traffic monitor
         self.on_connect = None      # fn()
         self.on_disconnect = None   # fn()
         self._subscriptions = []
@@ -89,9 +90,13 @@ class Bus:
             self.on_disconnect()
 
     def _handle_message(self, client, userdata, msg):
-        if self.on_message is None or not msg.topic.startswith(self.prefix):
+        if not msg.topic.startswith(self.prefix):
             return
         suffix = msg.topic[len(self.prefix):]
+        if self.on_raw is not None:
+            self.on_raw(suffix, msg.payload, bool(msg.retain), msg.qos)
+        if self.on_message is None:
+            return
         try:
             payload = json.loads(msg.payload.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
@@ -105,6 +110,7 @@ class NullBus:
     def __init__(self, cfg=None, client_id=None, status_topic="status", verbose=False):
         self.prefix = config.topic_prefix(cfg or {})
         self.on_message = None
+        self.on_raw = None
         self.on_connect = None
         self.on_disconnect = None
         self.verbose = verbose
@@ -128,6 +134,8 @@ class NullBus:
 
     def inject(self, suffix, payload, retain=False):
         """Deliver a message as if it came from the broker."""
+        if self.on_raw:
+            self.on_raw(suffix, encode(payload).encode("utf-8"), retain, 0)
         if self.on_message:
             self.on_message(suffix, payload, retain)
 

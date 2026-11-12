@@ -10,6 +10,11 @@ lockout_s = {{ picrawler_executor_lockout_s }}
 heartbeat_timeout_s = {{ picrawler_watchdog_heartbeat_timeout_s }}
 sit_after_disconnect_s = {{ picrawler_watchdog_sit_after_disconnect_s }}
 
+[battery]
+low_v = {{ picrawler_battery_low_v }}
+critical_v = {{ picrawler_battery_critical_v }}
+hold_s = 20.0
+
 [limits]
 steps_max = {{ picrawler_steps_max }}
 actions = {{ picrawler_allowed_actions | to_json }}

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PiCrawler MQTT</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/theme.js"></script>
+  <link rel="icon" href="/static/logo-mark.svg" type="image/svg+xml">
+</head>
+<body>
+  <main class="wide">
+    <div class="mqtt">
+      <section class="panel mqtt-tree">
+        <div class="row">
+          <h2>Topics</h2>
+          <span class="muted" id="prefix"></span>
+        </div>
+        <ul class="tree" id="tree"></ul>
+      </section>
+      <section class="panel mqtt-messages">
+        <div class="row">
+          <h2 id="selected">All topics</h2>
+          <span class="muted" id="rate"></span>
+        </div>
+        <div class="row">
+          <input id="filter" placeholder="Filter text in topic or payload" autocomplete="off">
+          <label class="muted"><input type="checkbox" id="exact"> this topic only</label>
+          <label class="muted"><input type="checkbox" id="hide-noisy" checked> hide heartbeat</label>
+          <button id="pause">Pause</button>
+          <button id="clear" class="danger">Clear</button>
+        </div>
+        <p class="muted">Read-only view of everything under the robot's prefix. Retained messages are marked.</p>
+        <ul class="messages" id="messages"></ul>
+      </section>
+    </div>
+  </main>
+  <script src="/static/app.js"></script>
+  <script src="/static/mqtt.js"></script>
+</body>
+</html>

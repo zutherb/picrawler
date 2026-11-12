@@ -41,7 +41,7 @@ class Users:
                 raise ValueError("user %s: role must be one of %s" % (name, ", ".join(ROLES)))
             if not str(spec.get("password_hash", "")).startswith("scrypt$"):
                 raise ValueError("user %s: password_hash must be a scrypt hash (python -m services.web.hashpw)" % name)
-            self._users[name] = (role, spec["password_hash"])
+            self._users[name.strip().lower()] = (role, spec["password_hash"])
         # verify against this when the user does not exist, so timing does not tell
         self._dummy = hash_password(secrets.token_hex(8))
 
@@ -49,8 +49,9 @@ class Users:
         return len(self._users)
 
     def check(self, name, password):
-        """Returns the role, or None."""
-        role, stored = self._users.get(name, (None, self._dummy))
+        """Returns the role, or None. User names ignore case and surrounding spaces
+        (phones capitalize the first letter); passwords are compared exactly."""
+        role, stored = self._users.get((name or "").strip().lower(), (None, self._dummy))
         ok = verify_password(password, stored)
         return role if ok and role else None
 

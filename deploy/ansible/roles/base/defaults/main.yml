@@ -28,3 +28,5 @@ base_packages:
   - mosquitto-clients
   # polkit rules let the web user restart units without sudo
   - polkitd
+  # OLED display rendering
+  - python3-pil

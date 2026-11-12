@@ -5,7 +5,7 @@ const canvas = document.getElementById("overlay");
 const ctx = canvas.getContext("2d");
 const showBoxes = document.getElementById("boxes");
 const feed = document.getElementById("feed");
-const FEED_MAX = 50;
+const FEED_MAX = 6;          // compact list; the dialog shows everything
 const BOX_TTL_MS = 600;
 let lastDetections = { objects: [], at: 0 };
 const feedRows = new Map();
@@ -23,7 +23,7 @@ video.addEventListener("error", () => {
 
 // --- boxes ---
 
-const COLORS = ["#ffd400", "#00e5ff", "#ff6bd6", "#7cff6b", "#ff9f40"];
+const COLORS = ["#30D5C0", "#A0F3E3", "#FEBC2E", "#FF5F57", "#B8ADD9"];
 function color(label) {
   let h = 0;
   for (const c of label) h = (h * 31 + c.charCodeAt(0)) >>> 0;
@@ -60,6 +60,23 @@ PC.on("detections", (d) => {
   document.getElementById("objects").textContent = labels.length ? labels.join(", ") : "";
 });
 
+// --- OLED mirror ---
+
+const oled = document.getElementById("oled");
+function showOled(frame) {
+  PC.drawOled(oled, frame);
+  document.getElementById("oled-note").textContent = "mirror, " + PC.time(frame.ts);
+}
+PC.on("display", showOled);
+
+async function loadOled() {
+  try {
+    showOled(await PC.api("GET", "/api/display"));
+  } catch (err) {
+    document.getElementById("oled-note").textContent = "no picture (display service offline or without MQTT)";
+  }
+}
+
 // --- recent log ---
 
 function feedItem(row) {
@@ -83,6 +100,72 @@ function addFeed(row) {
 PC.on("history", (rows) => { feed.textContent = ""; feedRows.clear(); rows.forEach(addFeed); });
 PC.on("log", addFeed);
 
+// --- dialog with all entries ---
+
+const dialog = document.getElementById("log-dialog");
+const dialogRows = document.getElementById("log-rows");
+const dialogFilter = document.getElementById("log-filter");
+const dialogById = new Map();
+
+function logRow(row) {
+  const score = row.max_score != null ? Number(row.max_score).toFixed(2) : "";
+  const tr = PC.el("tr", {},
+    PC.el("td", { class: "num" }, PC.dateTime(row.start)),
+    PC.el("td", { class: "num" }, row.kind === "sighting" ? (row.end ? PC.time(row.end) : "now") : ""),
+    PC.el("td", {}, PC.el("strong", {}, row.label), row.kind === "event" ? " " : null,
+          row.kind === "event" ? PC.el("span", { class: "tag" }, "event") : null),
+    PC.el("td", { class: "num" }, score),
+    PC.el("td", { class: "num" }, row.max_count || ""),
+    PC.el("td", { class: "muted" }, row.detail || row.mode || ""));
+  tr.dataset.search = `${row.label} ${row.detail || ""} ${row.mode || ""}`.toLowerCase();
+  return tr;
+}
+
+function applyFilter() {
+  const q = dialogFilter.value.trim().toLowerCase();
+  let shown = 0;
+  for (const tr of dialogRows.children) {
+    const match = !q || tr.dataset.search.includes(q);
+    tr.classList.toggle("hidden", !match);
+    shown += match ? 1 : 0;
+  }
+  document.getElementById("log-count").textContent = `${shown} entries`;
+}
+
+function upsertDialog(row, prepend) {
+  if (row.id == null) return;
+  const tr = logRow(row);
+  if (dialogById.has(row.id)) dialogById.get(row.id).replaceWith(tr);
+  else if (prepend) dialogRows.prepend(tr);
+  else dialogRows.append(tr);
+  dialogById.set(row.id, tr);
+}
+
+async function openDialog() {
+  dialogRows.textContent = "";
+  dialogById.clear();
+  dialog.showModal();
+  try {
+    (await PC.api("GET", "/api/log?limit=500")).forEach((r) => upsertDialog(r, false));
+  } catch (err) {
+    PC.toast("Log: " + err.message, true);
+  }
+  applyFilter();
+}
+
+const recent = document.getElementById("recent");
+recent.addEventListener("click", openDialog);
+recent.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDialog(); } });
+document.getElementById("log-close").addEventListener("click", () => dialog.close());
+document.getElementById("dialog-stop").addEventListener("click", () => PC.stop(false));
+dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });   // click on the backdrop
+dialogFilter.addEventListener("input", applyFilter);
+PC.on("log", (row) => {
+  if (!dialog.open) return;
+  upsertDialog(row, true);
+  applyFilter();
+});
+
 // --- status tiles ---
 
 function tile(label, value, level) {
@@ -96,6 +179,11 @@ PC.on("status", (s) => {
   const tiles = document.getElementById("tiles");
   tiles.textContent = "";
   tiles.append(tile("Body", online(s.body) ? "online" : "offline", online(s.body) ? "ok" : "bad"));
+  const b = s.battery;
+  if (b && b.present) {
+    tiles.append(tile("Battery", `${b.percent} % · ${b.voltage.toFixed(2)} V`,
+                      b.level === "critical" ? "bad" : b.level === "low" ? "warn" : "ok"));
+  }
   const m = s.motion || {};
   const motion = m.status === "running" ? `running ${m.name || ""}` : (m.status || "unknown");
   tiles.append(tile("Motion", motion, m.status === "error" ? "bad" : m.status === "running" ? "warn" : "ok"));
@@ -148,5 +236,6 @@ document.getElementById("agent-form").addEventListener("submit", async (e) => {
 PC.init("live").then(() => {
   if (PC.me.role === "admin") document.getElementById("agent-panel").classList.remove("hidden");
   startVideo();
+  loadOled();
   requestAnimationFrame(draw);
 });

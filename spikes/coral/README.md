@@ -23,6 +23,12 @@ reflash if needed.
 
 ## 1. Check the mechanics before installing anything
 
+Our setup: **Pineboards HatDrive! AI** (NVMe + E-key slot behind a PCIe
+switch) with a **Coral Dual Edge TPU**. The HatDrive passes one PCIe lane
+to the E-key slot, so only one of the two TPUs is expected to show up:
+`lspci` should list the switch, the NVMe and one `089a` device, and only
+`/dev/apex_0` should exist. Note what you actually see.
+
 - **Card variant:** the Coral M.2 Accelerator comes with an **A+E key**
   and with a **B+M key**. M.2 HATs for the Pi 5 usually have an M-key
   slot, where only the B+M variant fits directly. The Dual Edge TPU card

@@ -18,6 +18,7 @@ COOKIE = "picrawler_session"
 PUBLIC_PATHS = ("/login",)
 VISION_MODES = ("detect", "pose", "imprint", "off")
 BT_ACTIONS = ("pair", "connect", "disconnect", "remove")
+REMOTE_ACTIONS = ("stand", "sit", "wave", "dance", "push up", "look left", "look right", "look up", "look down")
 SIT_BEFORE_POWEROFF_S = 3.0
 SSE_KEEPALIVE_S = 15.0
 CSP = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; "
@@ -63,7 +64,8 @@ async def read_json(request):
 
 class WebApp:
 
-    def __init__(self, cfg, users, sessions, limiter, state, hub, bus, bluetooth, system, store, fake=False):
+    def __init__(self, cfg, users, sessions, limiter, state, hub, bus, bluetooth, system, store, fake=False,
+                 monitor=None, debug_hub=None):
         self.cfg = cfg
         self.http_cfg = cfg.get("http", {})
         self.users = users
@@ -76,6 +78,8 @@ class WebApp:
         self.system = system
         self.store = store
         self.fake = fake
+        self.monitor = monitor
+        self.debug_hub = debug_hub or Hub()
         self.secure_cookie = bool(self.http_cfg.get("cert"))
         self.vision_stream = self.http_cfg.get("vision_stream", "http://127.0.0.1:8081/stream.mjpg")
         self._tasks = set()
@@ -89,6 +93,8 @@ class WebApp:
         r.add_get("/", self.page("live.html"))
         r.add_get("/log", self.page("log.html"))
         r.add_get("/admin", self.page("admin.html", admin=True))
+        r.add_get("/mqtt", self.page("mqtt.html", admin=True))
+        r.add_get("/remote", self.page("remote.html", admin=True))
         r.add_get("/stream.mjpg", self.stream)
         r.add_get("/events", self.events)
         r.add_get("/api/me", self.me)
@@ -98,9 +104,15 @@ class WebApp:
         r.add_post("/api/stop", self.stop)
         r.add_post("/api/vision/mode", self.vision_mode)
         r.add_post("/api/agent/ask", self.agent_ask)
+        r.add_post("/api/remote", self.remote)
         r.add_get("/api/bluetooth", self.bt_devices)
         r.add_post("/api/bluetooth/scan", self.bt_scan)
         r.add_post("/api/bluetooth/{action}", self.bt_action)
+        r.add_get("/api/mqtt/topics", self.mqtt_topics)
+        r.add_get("/api/mqtt/messages", self.mqtt_messages)
+        r.add_get("/api/mqtt/events", self.mqtt_events)
+        r.add_post("/api/mqtt/clear", self.mqtt_clear)
+        r.add_get("/api/display", self.display_frame)
         r.add_get("/api/system", self.system_info)
         r.add_get("/api/system/journal", self.system_journal)
         r.add_post("/api/system/restart", self.system_restart)
@@ -117,6 +129,10 @@ class WebApp:
         except web.HTTPException as e:
             response = e
         if not response.prepared:
+            if request.path.startswith("/static/"):
+                # revalidate every time (cheap 304 via ETag), so an update of
+                # app.js never meets a cached older page script
+                response.headers.setdefault("Cache-Control", "no-cache")
             response.headers.setdefault("Content-Security-Policy", CSP)
             response.headers.setdefault("X-Content-Type-Options", "nosniff")
             response.headers.setdefault("Referrer-Policy", "no-referrer")
@@ -149,7 +165,7 @@ class WebApp:
         if not self.limiter.allow(request.remote or "?"):
             raise web.HTTPFound("/login?error=rate")
         form = await request.post()
-        user, password = str(form.get("user", "")), str(form.get("password", ""))
+        user, password = str(form.get("user", "")).strip().lower(), str(form.get("password", ""))
         role = await asyncio.get_running_loop().run_in_executor(None, self.users.check, user, password)
         if role is None:
             raise web.HTTPFound("/login?error=1")
@@ -180,15 +196,19 @@ class WebApp:
     # --- live data ---
 
     async def events(self, request):
+        recent = list(reversed(self.store.query(limit=30)))
+        initial = [("status", self.state.snapshot), ("history", recent)]
+        return await self.sse(request, self.hub, initial)
+
+    async def sse(self, request, hub, initial=(), queue_size=200):
         response = web.StreamResponse(headers={
             "Content-Type": "text/event-stream", "Cache-Control": "no-store", "X-Accel-Buffering": "no"})
         await response.prepare(request)
-        queue = asyncio.Queue(maxsize=200)
-        self.hub.clients.add(queue)
+        queue = asyncio.Queue(maxsize=queue_size)
+        hub.clients.add(queue)
         try:
-            await response.write(("event: status\ndata: %s\n\n" % encode(self.state.snapshot)).encode())
-            recent = list(reversed(self.store.query(limit=30)))
-            await response.write(("event: history\ndata: %s\n\n" % encode(recent)).encode())
+            for event, data in initial:
+                await response.write(("event: %s\ndata: %s\n\n" % (event, encode(data))).encode())
             while True:
                 try:
                     message = await asyncio.wait_for(queue.get(), SSE_KEEPALIVE_S)
@@ -198,7 +218,7 @@ class WebApp:
         except (ConnectionResetError, asyncio.CancelledError):
             pass
         finally:
-            self.hub.clients.discard(queue)
+            hub.clients.discard(queue)
         return response
 
     async def stream(self, request):
@@ -296,6 +316,32 @@ class WebApp:
                                        "user": request[SESSION]["user"], "ts": time.time()}, 1, False)
         return web.json_response({"ok": True})
 
+    @requires_admin
+    async def remote(self, request):
+        """Stick position from the remote page: a fact for the arbiter.
+
+        The browser sends this repeatedly while a control is held; when it
+        stops, the arbiter treats the remote as centered (dead man).
+        """
+        body = await read_json(request)
+        x, y = body.get("x", 0), body.get("y", 0)
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and -1 <= v <= 1 for v in (x, y)):
+            return json_error(400, "x and y must be numbers in -1..1")
+        payload = {"x": round(float(x), 3), "y": round(float(y), 3), "user": request[SESSION]["user"],
+                   "ts": time.time()}
+        speed = body.get("speed")
+        if speed is not None:
+            if isinstance(speed, bool) or not isinstance(speed, int) or not 1 <= speed <= 100:
+                return json_error(400, "speed must be an integer in 1..100")
+            payload["speed"] = speed
+        action = body.get("action")
+        if action is not None:
+            if action not in REMOTE_ACTIONS:
+                return json_error(400, "unknown action")
+            payload["action"] = action
+        self.bus.publish("remote/state", payload, 0, False)
+        return web.json_response({"ok": True})
+
     # --- bluetooth ---
 
     @requires_admin
@@ -350,6 +396,40 @@ class WebApp:
         task = asyncio.ensure_future(run())
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
+
+    async def display_frame(self, request):
+        frame = self.state.display_frame
+        if frame is None:
+            return json_error(404, "no picture from the display service yet")
+        return web.json_response(frame)
+
+    # --- MQTT debug (read-only) ---
+
+    @requires_admin
+    async def mqtt_topics(self, request):
+        return web.json_response({"prefix": self.bus.prefix if hasattr(self.bus, "prefix") else "",
+                                  "topics": self.monitor.topic_list() if self.monitor else []})
+
+    @requires_admin
+    async def mqtt_messages(self, request):
+        if not self.monitor:
+            return web.json_response([])
+        q = request.query
+        try:
+            limit = int(q.get("limit", 200))
+        except ValueError:
+            return json_error(400, "limit must be an integer")
+        return web.json_response(self.monitor.messages(q.get("topic", ""), q.get("subtree", "1") != "0", limit))
+
+    @requires_admin
+    async def mqtt_events(self, request):
+        return await self.sse(request, self.debug_hub, queue_size=1000)
+
+    @requires_admin
+    async def mqtt_clear(self, request):
+        if self.monitor:
+            self.monitor.clear()
+        return web.json_response({"ok": True})
 
     # --- system ---
 

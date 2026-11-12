@@ -1,0 +1,19 @@
+# {{ ansible_managed }}
+# Blinking power icon on the OLED while the Pi shuts down or reboots. Starts
+# once the display service has stopped (a stop is always ordered before a
+# start); at the very end systemd terminates it, and it leaves the icon on.
+[Unit]
+Description=PiCrawler OLED shutdown splash
+DefaultDependencies=no
+After=picrawler-display.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 {{ picrawler_splash_dir }}/oled-splash.py {{ picrawler_splash_dir }}/splash-shutdown.bin --driver {{ picrawler_display_driver }} --address {{ picrawler_display_address }} --max-seconds 300
+TimeoutStopSec=2
+NoNewPrivileges=true
+PrivateNetwork=true
+ProtectHome=true
+
+[Install]
+WantedBy=halt.target poweroff.target reboot.target

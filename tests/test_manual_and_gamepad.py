@@ -137,3 +137,58 @@ class AgentPausesWanderTest(unittest.TestCase):
         arbiter.on_message("agent/status", {"status": "online", "busy": False})
         arbiter.tick()
         self.assertEqual(len([m for m in sent if m[0] == "cmd/action"]), 1)
+
+
+class RemoteTest(unittest.TestCase):
+
+    def setUp(self):
+        self.sent = []
+        self.mono = Clock(100.0)
+        self.arbiter = Arbiter(lambda *m: self.sent.append(m), {"wander": {"enabled": True}},
+                               wall=Clock(NOW), mono=self.mono)
+        self.arbiter.on_message("status", {"status": "online"})
+        self.arbiter.on_message("state/motion", {"status": "idle", "queue_len": 0})
+
+    def remote(self, **payload):
+        self.arbiter.on_message("remote/state", dict({"x": 0, "y": 0, "user": "anna", "ts": NOW}, **payload))
+
+    def actions(self):
+        return [(m[1]["name"], m[1]["speed"]) for m in self.sent if m[0] == "cmd/action"]
+
+    def finish_last(self):
+        last = [m[1] for m in self.sent if m[0] == "cmd/action"][-1]
+        self.arbiter.on_message("state/motion", {"status": "idle", "command_id": last["id"], "queue_len": 0})
+
+    def test_stick_with_speed_and_action(self):
+        self.remote(y=-1, speed=40)
+        self.arbiter.tick()
+        self.finish_last()
+        self.remote(action="wave", speed=90)
+        self.arbiter.tick()
+        self.assertEqual(self.actions(), [("forward", 40), ("wave", 90)])
+
+    def test_dead_man_when_the_browser_goes_quiet(self):
+        self.remote(x=1)
+        self.arbiter.tick()
+        self.finish_last()
+        self.mono.t += 1.5                       # no more remote messages
+        self.arbiter.tick()
+        self.assertEqual(self.actions(), [("turn right", 70)])
+
+    def test_remote_pauses_wander_and_rejects_garbage(self):
+        self.arbiter.on_message("sensor/ultrasonic/distance", {"cm": 80})
+        self.remote(y=1)
+        self.arbiter.tick()
+        self.assertEqual(self.actions(), [("backward", 70)])
+        self.remote(x="left")
+        self.remote(action="self-destruct")
+        self.remote(x=1, retain_is_ignored=True)
+        self.arbiter.on_message("remote/state", {"x": 1, "y": 0}, retain=True)
+        self.assertNotIn("self-destruct", [a for a, _ in self.actions()])
+
+    def test_freshest_source_wins(self):
+        self.arbiter.on_message("sensor/gamepad/state", {"x": 0, "y": -1, "buttons": []})
+        self.mono.t += 0.2
+        self.remote(x=-1)
+        self.arbiter.tick()
+        self.assertEqual(self.actions()[0][0], "turn left")

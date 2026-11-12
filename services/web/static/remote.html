@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>PiCrawler remote</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/theme.js"></script>
+  <link rel="icon" href="/static/logo-mark.svg" type="image/svg+xml">
+</head>
+<body>
+  <main>
+    <div class="remote">
+      <section class="panel">
+        <div class="row">
+          <h2>Camera</h2>
+          <span class="tag" id="mode">idle</span>
+        </div>
+        <div class="video">
+          <div class="placeholder" id="placeholder">No video. Is the vision service running?</div>
+          <img id="video" alt="Camera stream">
+        </div>
+        <div class="chips" id="chips"></div>
+      </section>
+
+      <section class="panel remote-controls">
+        <div class="row">
+          <h2>Drive</h2>
+          <span class="muted" id="source">drag, WASD / arrows, or a gamepad</span>
+        </div>
+        <div class="joystick" id="joystick">
+          <div class="joystick-ring"></div>
+          <span class="joystick-label up">forward</span>
+          <span class="joystick-label down">back</span>
+          <span class="joystick-label left">left</span>
+          <span class="joystick-label right">right</span>
+          <div class="joystick-thumb" id="thumb"></div>
+        </div>
+
+        <label class="speed">
+          <span class="label">Speed <strong id="speed-value">70</strong></span>
+          <input type="range" id="speed" min="20" max="100" step="5" value="70">
+        </label>
+
+        <div class="actions" id="actions">
+          <button data-action="stand">Stand</button>
+          <button data-action="sit">Sit</button>
+          <button data-action="wave">Wave</button>
+          <button data-action="dance">Dance</button>
+          <button data-action="push up">Push up</button>
+          <button data-action="look left">Look left</button>
+          <button data-action="look right">Look right</button>
+          <button data-action="look up">Look up</button>
+        </div>
+
+        <button class="stop big-stop" id="big-stop">STOP</button>
+        <p class="muted small">Moves only while you hold a control. Release, close the tab or lose the
+          connection and the crawler stops after the current step. The obstacle stop and the battery
+          protection always apply.</p>
+      </section>
+    </div>
+  </main>
+  <script src="/static/app.js"></script>
+  <script src="/static/remote.js"></script>
+</body>
+</html>

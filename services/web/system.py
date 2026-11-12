@@ -9,7 +9,7 @@ import random
 import re
 import time
 
-from .metrics import CpuSampler, read_metrics
+from services.common.metrics import CpuSampler, read_metrics
 
 UNIT = re.compile(r"^picrawler-[a-z0-9_-]+(@[a-z0-9_-]+)?\.service$")
 

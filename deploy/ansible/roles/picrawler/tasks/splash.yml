@@ -1,0 +1,56 @@
+---
+# Logo on the OLED during boot and shutdown (see services/display/splash.py).
+
+- name: Create the splash directory on the SD card
+  ansible.builtin.file:
+    path: "{{ picrawler_splash_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the splash script
+  ansible.builtin.copy:
+    src: oled-splash.py
+    dest: "{{ picrawler_splash_dir }}/oled-splash.py"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render the splash pictures
+  ansible.builtin.command:
+    cmd: "{{ picrawler_venv }}/bin/python -m services.display.splash --state {{ item }} --export {{ picrawler_splash_dir }}/splash-{{ item }}.bin.new"
+    chdir: "{{ picrawler_src_dir }}"
+  loop: [boot, shutdown]
+  changed_when: false
+
+- name: Put the splash pictures in place
+  ansible.builtin.copy:
+    src: "{{ picrawler_splash_dir }}/splash-{{ item }}.bin.new"
+    dest: "{{ picrawler_splash_dir }}/splash-{{ item }}.bin"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [boot, shutdown]
+
+- name: Install the splash units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - picrawler-splash.service
+    - picrawler-splash-shutdown.service
+  notify: Reload systemd
+
+- name: Enable the splash units
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    daemon_reload: true
+  loop:
+    - picrawler-splash.service
+    - picrawler-splash-shutdown.service

@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.svg" width="160" alt="PiCrawler logo"></p>
+
 # Picrawler motion framework
 
 A stripped-down fork of [sunfounder/picrawler](https://github.com/sunfounder/picrawler)

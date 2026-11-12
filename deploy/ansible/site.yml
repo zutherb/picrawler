@@ -5,4 +5,7 @@
   roles:
     - base
     - mosquitto
+    # after the packages and users exist, before the robot stack is installed
+    - role: storage
+      when: storage_enabled | default(true) | bool
     - picrawler

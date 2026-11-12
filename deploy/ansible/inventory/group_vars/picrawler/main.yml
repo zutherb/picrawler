@@ -47,6 +47,9 @@ mosquitto_users:
   - name: voice
     role: voice
     password: "{{ vault_mqtt_password_voice }}"
+  - name: display
+    role: display
+    password: "{{ vault_mqtt_password_display }}"
 
 # Web UI logins. Hash: python3 -m services.web.hashpw (store the hash in vault.yml).
 picrawler_web_users:
