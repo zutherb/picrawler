@@ -28,7 +28,7 @@ class FakeBody:
 
     def publish(self, suffix, payload, qos=0, retain=False):
         self.sent.append((suffix, payload))
-        if suffix != "cmd/action" or self.outcome == "silent":
+        if suffix != "agent/goal" or self.outcome == "silent":
             return
         if self.on_turn and payload["name"].startswith("turn"):
             self.on_turn()
@@ -38,7 +38,7 @@ class FakeBody:
             self.world.on_message("state/motion", {"status": "idle", "command_id": payload["id"]})
 
     def actions(self):
-        return [(p["name"], p["steps"]) for s, p in self.sent if s == "cmd/action"]
+        return [(p["name"], p["steps"]) for s, p in self.sent if s == "agent/goal"]
 
 
 def make_world():
@@ -47,6 +47,7 @@ def make_world():
     world = World(body.publish, mono=mono)
     body.world = world
     world.on_message("status", {"status": "online"})
+    world.on_message("arbiter/status", {"status": "online"})
     return body, world, mono
 
 
@@ -67,6 +68,17 @@ class WorldAndToolsTest(unittest.TestCase):
         self.world.on_message("status", {"status": "offline"})
         self.assertEqual(self.world.act("forward")[0], "failed")
         self.assertEqual(self.body.sent, [])
+
+    def test_arbiter_offline_or_refusing(self):
+        self.world.on_message("arbiter/status", {"status": "offline"})
+        self.assertEqual(self.world.act("forward"), ("failed", "the arbiter is offline"))
+        self.assertEqual(self.body.sent, [])
+        self.world.on_message("arbiter/status", {"status": "online"})
+        self.body.outcome = "silent"
+        timer = threading.Timer(0.05, lambda: self.world.on_message(
+            "arbiter/rejected", {"id": self.body.sent[-1][1]["id"], "reason": "manual control active"}))
+        timer.start()
+        self.assertEqual(self.world.act("forward", 1, timeout=2), ("rejected", "manual control active"))
 
     def test_stop_event_resolves_waiter(self):
         self.body.outcome = "silent"

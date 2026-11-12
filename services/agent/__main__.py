@@ -19,8 +19,8 @@ from .brains import BrainUnavailable, KeywordBrain, LiteRtBrain, OpenAiBrain
 from .tools import build_tools
 from .world import World
 
-SUBSCRIPTIONS = ("status", "state/motion", "event/rejected", "event/stop", "sensor/vision/detections",
-                 "sensor/ultrasonic/distance", "sensor/speech/text", "agent/ask")
+SUBSCRIPTIONS = ("status", "arbiter/status", "state/motion", "event/rejected", "arbiter/rejected", "event/stop",
+                 "sensor/vision/detections", "sensor/ultrasonic/distance", "sensor/speech/text", "agent/ask")
 
 
 def make_brains(cfg, tools, fake, language="de"):

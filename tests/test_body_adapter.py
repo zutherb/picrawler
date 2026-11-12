@@ -145,5 +145,61 @@ class BodyAdapterTest(unittest.TestCase):
         self.assertEqual((self.sent, self.ex.stops), ([], []))
 
 
+class InterlockTest(unittest.TestCase):
+
+    def setUp(self):
+        self.ex = FakeExecutor()
+        self.sent = []
+        self.wall = Clock(NOW)
+        self.mono = Clock(500.0)
+        self.body = BodyAdapter(self.ex, lambda *m: self.sent.append(m), {}, wall=self.wall, mono=self.mono)
+        self.body.on_message("cmd/heartbeat", {"ts": NOW})
+
+    def distance(self, *values):
+        for cm in values:
+            self.body.on_message("sensor/ultrasonic/distance", {"cm": cm, "ts": NOW})
+
+    def forward(self, cmd_id="a1", name="forward"):
+        self.body.on_message("cmd/action", {"id": cmd_id, "name": name, "ts": NOW})
+
+    def rejected(self):
+        return [m[1]["reason"] for m in self.sent if m[0] == "event/rejected"]
+
+    def test_subscribes_to_the_sensor(self):
+        self.assertIn("sensor/ultrasonic/distance", self.body.topics)
+        off = BodyAdapter(self.ex, lambda *m: None, {"interlock": {"enabled": False}})
+        self.assertNotIn("sensor/ultrasonic/distance", off.topics)
+
+    def test_refuses_forward_but_not_turning_near_an_obstacle(self):
+        self.distance(10, 11, 40)                     # median 11
+        self.forward("a1")
+        self.forward("a2", name="turn left")
+        self.assertEqual(self.rejected(), ["obstacle 11 cm ahead"])
+        self.assertEqual([c.name for c in self.ex.submitted], ["turn left"])
+
+    def test_stops_a_running_forward_once(self):
+        self.ex.state = ExecutorState("running", command_id="a1", name="forward", priority=Priority.GOAL)
+        self.distance(30, 12, 12, 12)
+        self.assertEqual(self.ex.stops, [(Priority.SAFETY, False)])
+        stops = [m[1]["reason"] for m in self.sent if m[0] == "event/stop"]
+        self.assertEqual(stops, ["obstacle 12 cm (body interlock)"])
+
+    def test_leaves_other_actions_alone(self):
+        self.ex.state = ExecutorState("running", command_id="a1", name="backward", priority=Priority.GOAL)
+        self.distance(5, 5, 5)
+        self.assertEqual(self.ex.stops, [])
+
+    def test_stale_or_missing_readings_block_nothing(self):
+        self.forward("a1")
+        self.distance(5, 5, 5)
+        self.mono.t += 1.5
+        self.body.on_message("cmd/heartbeat", {"ts": NOW})
+        self.forward("a2")
+        self.body.on_message("sensor/ultrasonic/distance", {"cm": 5}, retain=True)
+        self.forward("a3")
+        self.assertEqual(self.rejected(), [])
+        self.assertEqual(len(self.ex.submitted), 3)
+
+
 if __name__ == "__main__":
     unittest.main()

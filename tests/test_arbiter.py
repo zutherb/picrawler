@@ -174,5 +174,62 @@ class WanderTest(ArbiterTestBase):
         self.assertEqual(self.actions(), [])
 
 
+class AgentGoalTest(ArbiterTestBase):
+
+    def setUp(self):
+        self.make({"rule": [OBSTACLE_RULE], "wander": {"enabled": True}})
+        self.arbiter.on_message("status", {"status": "online"})
+        self.arbiter.on_message("state/motion", {"status": "idle", "queue_len": 0})
+
+    def goal(self, cmd_id="g1", name="forward", steps=3, speed=60):
+        self.arbiter.on_message("agent/goal", {"id": cmd_id, "name": name, "steps": steps, "speed": speed, "ts": NOW})
+
+    def rejected(self):
+        return [(m[1]["id"], m[1]["reason"]) for m in self.topics("arbiter/rejected")]
+
+    def test_goal_becomes_command_with_the_agents_id(self):
+        self.goal()
+        self.arbiter.tick()
+        action = self.topics("cmd/action")[0][1]
+        self.assertEqual((action["id"], action["name"], action["steps"], action["speed"], action["priority"]),
+                         ("g1", "forward", 3, 60, "goal"))
+
+    def test_waits_for_idle_body_and_gives_up(self):
+        self.arbiter.on_message("state/motion", {"status": "running", "command_id": "other", "queue_len": 0})
+        self.goal()
+        self.arbiter.tick()
+        self.assertEqual(self.topics("cmd/action"), [])
+        self.mono.t += 6
+        self.arbiter.tick()
+        self.assertEqual(self.rejected(), [("g1", "body busy or offline")])
+
+    def test_manual_control_wins(self):
+        self.arbiter.on_message("remote/state", {"x": 0, "y": -1})
+        self.goal()
+        self.arbiter.tick()
+        self.assertEqual(self.rejected(), [("g1", "manual control active")])
+        self.assertEqual([m[1]["name"] for m in self.topics("cmd/action")], ["forward"])
+        self.assertNotEqual(self.topics("cmd/action")[0][1]["id"], "g1")
+
+    def test_invalid_and_replaced_goals(self):
+        self.arbiter.on_message("agent/goal", {"id": "bad", "name": "forward", "steps": 99, "ts": NOW})
+        self.arbiter.on_message("state/motion", {"status": "running", "command_id": "x", "queue_len": 0})
+        self.goal("g1")
+        self.goal("g2")
+        self.assertEqual(self.rejected(), [("bad", "invalid goal"), ("g1", "replaced by a newer goal")])
+
+    def test_wander_pauses_while_a_goal_waits_or_runs(self):
+        self.distance(80)
+        self.goal()
+        self.arbiter.tick()
+        names = [m[1]["id"] for m in self.topics("cmd/action")]
+        self.assertEqual(names, ["g1"])
+        self.arbiter.on_message("state/motion", {"status": "running", "command_id": "g1", "queue_len": 0})
+        self.arbiter.on_message("state/motion", {"status": "idle", "command_id": "g1", "queue_len": 0})
+        self.distance(80)
+        self.arbiter.tick()
+        self.assertEqual(len(self.topics("cmd/action")), 2)   # wander resumes
+
+
 if __name__ == "__main__":
     unittest.main()

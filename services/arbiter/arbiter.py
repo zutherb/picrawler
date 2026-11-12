@@ -14,6 +14,7 @@ HEARTBEAT_S = 0.25
 STALE_S = 1.0
 PENDING_TIMEOUT_S = 5.0
 RETRY_AFTER_REJECT_S = 0.5
+GOAL_WAIT_S = 5.0                 # an agent goal not started by then is rejected
 
 OPERATORS = {
     "<": operator.lt, "<=": operator.le, ">": operator.gt,
@@ -97,10 +98,11 @@ class Arbiter:
         self.body_online = False
         self.agent_busy = False           # the language model agent is acting
         self.motion = {}                  # last state/motion payload
-        # Manual control comes first: while it is active, wander pauses.
+        # Order is precedence: manual control, then the agent, then wander.
         self.manual = Manual(self, cfg.get("manual", {}))
+        self.agent = AgentGoals(self)
         self.wander = Wander(self, cfg.get("wander", {}))
-        self.behaviors = (self.manual, self.wander)
+        self.behaviors = (self.manual, self.agent, self.wander)
 
     # --- incoming ---
 
@@ -121,6 +123,10 @@ class Arbiter:
             return
         if suffix == "agent/status":
             self.agent_busy = isinstance(payload, dict) and payload.get("status") == "online" and bool(payload.get("busy"))
+            return
+        if suffix == AgentGoals.topic:
+            if not retain:
+                self.agent.on_goal(payload)
             return
         if suffix == self.manual.remote_topic:
             if not retain:
@@ -180,8 +186,8 @@ class Arbiter:
     def send_stop(self, reason, sit=False):
         self.publish("cmd/stop", {"id": new_id(), "sit": sit, "reason": reason, "ts": self._wall()}, 1, False)
 
-    def send_action(self, name, steps=1, speed=50, priority="goal"):
-        cmd_id = new_id()
+    def send_action(self, name, steps=1, speed=50, priority="goal", cmd_id=None):
+        cmd_id = cmd_id or new_id()
         self.publish("cmd/action", {"id": cmd_id, "name": name, "steps": steps, "speed": speed,
                                     "priority": priority, "ts": self._wall()}, 1, False)
         return cmd_id
@@ -234,9 +240,9 @@ class Behavior:
             self.pending = None
         return a.body_idle()
 
-    def send(self, name, speed):
+    def send(self, name, speed, steps=1, cmd_id=None):
         a = self.arbiter
-        self.pending = (a.send_action(name, steps=1, speed=speed, priority="goal"), a._mono())
+        self.pending = (a.send_action(name, steps=steps, speed=speed, priority="goal", cmd_id=cmd_id), a._mono())
 
     def tick(self):
         pass
@@ -339,6 +345,68 @@ class Manual(Behavior):
         self.send(name, current[2] if current and current[2] else self.speed)
 
 
+class AgentGoals(Behavior):
+    """Goals from the language model agent (agent/goal).
+
+    The agent asks, the arbiter decides: a goal waits until the body is
+    idle and is passed on as cmd/action with the agent's id, so the agent
+    sees the body's state/motion and event/rejected for it. Manual control
+    wins: while it is active, goals are refused on arbiter/rejected, as are
+    goals that could not start within GOAL_WAIT_S. One goal at a time; a
+    newer one replaces a waiting one.
+    """
+
+    topic = "agent/goal"
+
+    def __init__(self, arbiter):
+        super().__init__(arbiter)
+        self.waiting = None               # (goal dict, mono time received)
+
+    def on_goal(self, payload):
+        goal = self._valid(payload)
+        if goal is None:
+            cmd_id = payload.get("id") if isinstance(payload, dict) else None
+            self.reject(cmd_id if isinstance(cmd_id, str) else None, "invalid goal")
+            return
+        if self.waiting:
+            self.reject(self.waiting[0]["id"], "replaced by a newer goal")
+        self.waiting = (goal, self.arbiter._mono())
+
+    @staticmethod
+    def _valid(payload):
+        if not isinstance(payload, dict):
+            return None
+        cmd_id, name = payload.get("id"), payload.get("name")
+        steps, speed = payload.get("steps", 1), payload.get("speed", 50)
+        if not (isinstance(cmd_id, str) and 0 < len(cmd_id) <= 64 and isinstance(name, str) and name):
+            return None
+        for value, hi in ((steps, 10), (speed, 100)):
+            if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= hi:
+                return None
+        return {"id": cmd_id, "name": name, "steps": steps, "speed": speed}
+
+    def active(self):
+        return self.waiting is not None or self.pending is not None
+
+    def reject(self, cmd_id, reason):
+        self.arbiter.publish("arbiter/rejected", {"id": cmd_id, "reason": reason, "ts": self.arbiter._wall()}, 1, False)
+
+    def tick(self):
+        if not self.waiting:
+            return
+        goal, received = self.waiting
+        if self.arbiter.manual.active():
+            self.waiting = None
+            self.reject(goal["id"], "manual control active")
+            return
+        if self.ready():
+            self.waiting = None
+            self.send(goal["name"], goal["speed"], steps=goal["steps"], cmd_id=goal["id"])
+        elif self.arbiter._mono() - received > GOAL_WAIT_S:
+            self.waiting = None
+            self.reject(goal["id"], "body busy or offline")
+
+
 class Wander(Behavior):
     """Optional demo goal: walk forward, turn away from obstacles.
 
@@ -367,6 +435,6 @@ class Wander(Behavior):
         a = self.arbiter
         if not self.enabled or self.distance is None or not a.sensor_fresh(self.sensor):
             return
-        if a.manual.active() or a.agent_busy or not self.ready():
+        if a.manual.active() or a.agent_busy or a.agent.active() or not self.ready():
             return
         self.send("forward" if self.distance > self.clear_cm else self.turn, self.speed)

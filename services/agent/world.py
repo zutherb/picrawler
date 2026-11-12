@@ -1,8 +1,10 @@
 """The agent's view of the robot and the blocking actions its tools use.
 
 MQTT messages arrive on the network thread (on_message); tools run on the
-agent's worker thread and wait for the body to finish a command. Commands
-are plain goals: the arbiter's safety stop and the body's lockout still win.
+agent's worker thread and wait for the body to finish a command. Movement
+goes to the arbiter as agent/goal; it decides when (and whether) the body
+gets it, so manual control, the obstacle stop and the body's lockout win.
+Stop goes straight to the body as cmd/stop.
 """
 import threading
 import time
@@ -39,6 +41,7 @@ class World:
         self.distance_cm = None
         self.distance_at = None
         self.body_online = False
+        self.arbiter_online = False
         self.motion = {}
 
     # --- incoming (network thread) ---
@@ -48,12 +51,14 @@ class World:
             return
         if suffix == "status":
             self.body_online = payload.get("status") == "online"
+        elif suffix == "arbiter/status":
+            self.arbiter_online = payload.get("status") == "online"
         elif suffix == "state/motion":
             self.motion = payload
             if payload.get("status") in ("idle", "error"):
                 self._resolve(payload.get("command_id"), "error" if payload.get("status") == "error" else "done",
                               payload.get("error"))
-        elif suffix == "event/rejected":
+        elif suffix in ("event/rejected", "arbiter/rejected"):
             self._resolve(payload.get("id"), "rejected", payload.get("reason"))
         elif suffix == "event/stop":
             # a stop aborts whatever we were waiting for
@@ -80,16 +85,18 @@ class World:
     # --- actions (worker thread) ---
 
     def act(self, name, steps=1, speed=60, timeout=ACTION_TIMEOUT_S):
-        """Send a goal action and wait for it. Returns (outcome, detail)."""
+        """Ask the arbiter for an action and wait for it. Returns (outcome, detail)."""
         if not self.body_online:
             return "failed", "the body service is offline"
+        if not self.arbiter_online:
+            return "failed", "the arbiter is offline"
         cmd_id = new_id()
         waiter = [threading.Event(), ("timeout", None)]
         with self._lock:
             self._waiters[cmd_id] = waiter
         try:
-            self.publish("cmd/action", {"id": cmd_id, "name": name, "steps": steps, "speed": speed,
-                                        "priority": "goal", "ts": self._wall()}, 1, False)
+            self.publish("agent/goal", {"id": cmd_id, "name": name, "steps": steps, "speed": speed,
+                                        "ts": self._wall()}, 1, False)
             waiter[0].wait(timeout)
             return waiter[1]
         finally:

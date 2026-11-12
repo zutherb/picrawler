@@ -11,6 +11,8 @@ from services.common.mqtt import Bus
 from .arbiter import Arbiter
 
 TICK_S = 0.05
+SUBSCRIPTIONS = ("sensor/#", "state/motion", "status", "event/rejected", "agent/status", "agent/goal",
+                 "remote/state")
 
 
 def main():
@@ -25,7 +27,7 @@ def main():
         with lock:
             arbiter.on_message(suffix, payload, retain)
 
-    for topic in ("sensor/#", "state/motion", "status", "event/rejected", "agent/status", "remote/state"):
+    for topic in SUBSCRIPTIONS:
         bus.subscribe(topic)
     bus.on_message = on_message
     bus.on_connect = lambda: bus.publish_status("online")

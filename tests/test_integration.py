@@ -103,5 +103,24 @@ class IntegrationTest(unittest.TestCase):
         self.assertEqual(self.crawler.moves, [])
 
 
+    def test_body_interlock_stops_without_the_arbiter_rule(self):
+        self.arbiter.rules = []                       # e.g. arbiter misconfigured
+        self.broker.subscribe(("sensor/ultrasonic/distance",), self.body.on_message)
+        self.arbiter.tick()
+        self.arbiter.send_action("forward", steps=10, speed=70)
+        while len(self.crawler.moves) < 3:
+            time.sleep(0.005)
+
+        for _ in range(3):
+            self.distance(5)
+        stopped_at = len(self.crawler.moves)
+        self.assertTrue(self.executor.wait_idle(1))
+
+        self.assertLessEqual(len(self.crawler.moves) - stopped_at, 1)
+        self.assertEqual([p["reason"] for s, p in self.broker.log if s == "cmd/stop"], [])
+        self.assertIn("obstacle 5 cm (body interlock)",
+                      [p["reason"] for s, p in self.broker.log if s == "event/stop"])
+
+
 if __name__ == "__main__":
     unittest.main()

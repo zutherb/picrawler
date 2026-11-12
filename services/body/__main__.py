@@ -9,7 +9,7 @@ import time
 from services.common import config
 from services.common.mqtt import Bus
 
-from .adapter import COMMAND_TOPICS, BodyAdapter
+from .adapter import BodyAdapter
 
 TICK_S = 0.1
 BATTERY_EVERY_S = 5.0
@@ -45,8 +45,8 @@ def main():
     )
     adapter = BodyAdapter(executor, bus.publish, cfg)
 
-    for topic in COMMAND_TOPICS:
-        bus.subscribe(topic, qos=0 if topic == "cmd/heartbeat" else 1)
+    for topic in adapter.topics:
+        bus.subscribe(topic, qos=1 if topic.startswith("cmd/") and topic != "cmd/heartbeat" else 0)
     bus.on_connect = adapter.on_connect
     bus.on_disconnect = adapter.on_disconnect
     bus.on_message = adapter.on_message
