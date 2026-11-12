@@ -764,6 +764,11 @@ actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wa
   radio-mast icon and the hotspot IP, the admin page a Network tile.
   Bluetooth PAN was considered and rejected: ~1-2 Mbit/s is too little for
   the video stream.
+- **iPhone/iPad app** (`apps/ios`, SwiftUI): remote control in the look of
+  the web Remote page, same HTTP API (login, CSRF, `/api/remote`,
+  `/api/stop`, SSE, MJPEG). Finds the robot via Bonjour (`_picrawler._tcp`,
+  announced by avahi) or joins its hotspot (`NEHotspotConfiguration`);
+  pins the self-signed certificate on first use.
 - Open: whether the HatDrive! AI and the Robot HAT fit together
   mechanically, and the extra power draw of the NVMe on battery.
 

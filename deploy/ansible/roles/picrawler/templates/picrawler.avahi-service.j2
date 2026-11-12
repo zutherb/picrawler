@@ -1,0 +1,14 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- {{ ansible_managed }} -->
+<!-- Lets the iPhone/iPad app find the robot without typing an address. -->
+<service-group>
+  <name replace-wildcards="yes">PiCrawler {{ picrawler_robot_id }} on %h</name>
+  <service>
+    <type>_picrawler._tcp</type>
+    <port>{{ picrawler_web_listen.split(':')[-1] }}</port>
+    <txt-record>id={{ picrawler_robot_id }}</txt-record>
+    <txt-record>tls={{ '1' if picrawler_web_tls | bool else '0' }}</txt-record>
+    <txt-record>api=1</txt-record>
+  </service>
+</service-group>

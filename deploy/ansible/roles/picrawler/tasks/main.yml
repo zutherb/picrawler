@@ -181,6 +181,21 @@
     mode: "0640"
   when: picrawler_web_tls | bool
 
+- name: Install avahi for Bonjour discovery
+  ansible.builtin.apt:
+    name: [avahi-daemon]
+    state: present
+  when: "'web' in picrawler_services | map(attribute='name')"
+
+- name: Announce the web UI via Bonjour (_picrawler._tcp) for the iOS app
+  ansible.builtin.template:
+    src: picrawler.avahi-service.j2
+    dest: /etc/avahi/services/picrawler.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: "'web' in picrawler_services | map(attribute='name')"
+
 - name: Allow the web user to restart PiCrawler units and power off (polkit)
   ansible.builtin.template:
     src: polkit-picrawler-web.rules.j2

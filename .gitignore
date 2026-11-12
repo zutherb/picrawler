@@ -9,3 +9,5 @@ backups/*
 __pycache__/
 *.pyc
 .ansible/
+apps/ios/*.xcodeproj/
+apps/ios/build/
