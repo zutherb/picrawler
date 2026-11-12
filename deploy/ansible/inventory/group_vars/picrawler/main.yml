@@ -6,9 +6,12 @@ picrawler_user: picrawler
 picrawler_services_start: false
 
 # Sensors that run on the Pi itself, one systemd instance each.
-picrawler_sensors:
-  - ultrasonic
-  - gamepad
+picrawler_sensors: "{{ ['ultrasonic', 'gamepad'] + (['speech'] if picrawler_speech_enabled | default(true) | bool else []) }}"
+
+# Voice stack (USB microphone, whisper.cpp, agent, Piper). See docs section 9.
+# picrawler_speech_enabled: true
+# Gemma 4 E2B as .litertlm (litert-community on Hugging Face); empty = keyword parser only
+picrawler_agent_model_url: ""
 
 # MQTT accounts. Passwords come from vault.yml (see vault.example.yml).
 mosquitto_users:
@@ -34,6 +37,16 @@ mosquitto_users:
     role: ui
     owner: picrawler-web
     password: "{{ vault_mqtt_password_ui }}"
+  - name: sensor-speech
+    role: sensor
+    sensor: speech
+    password: "{{ vault_mqtt_password_sensor_speech }}"
+  - name: agent
+    role: agent
+    password: "{{ vault_mqtt_password_agent }}"
+  - name: voice
+    role: voice
+    password: "{{ vault_mqtt_password_voice }}"
 
 # Web UI logins. Hash: python3 -m services.web.hashpw (store the hash in vault.yml).
 picrawler_web_users:

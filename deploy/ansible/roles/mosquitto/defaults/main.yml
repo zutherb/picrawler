@@ -12,6 +12,6 @@ mosquitto_robot_id: "{{ picrawler_robot_id | default('1') }}"
 mosquitto_client_secret_dir: /etc/picrawler/mqtt
 mosquitto_client_secret_owner: "{{ picrawler_user | default('picrawler') }}"
 
-# List of {name, role: body|arbiter|sensor|ui, sensor?, password, owner?}
+# List of {name, role: body|arbiter|sensor|ui|agent|voice, sensor?, password, owner?}
 # owner: local user that may read the password file (default: picrawler)
 mosquitto_users: []

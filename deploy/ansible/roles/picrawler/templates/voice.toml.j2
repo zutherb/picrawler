@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+{% set mqtt_user = 'voice' %}
+{% include '_mqtt.toml.j2' %}
+
+[voice]
+piper = "{{ picrawler_install_dir }}/piper/piper"
+model = "{{ picrawler_speech_dir }}/{{ picrawler_piper_voice_url | basename }}"
+device = ""                 # ALSA device for aplay; empty = default
+robot_hat_speaker = true    # switch on the Robot HAT amplifier at start

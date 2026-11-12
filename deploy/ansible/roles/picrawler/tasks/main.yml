@@ -2,7 +2,7 @@
 - name: Check that every service and sensor has an MQTT account
   ansible.builtin.assert:
     that:
-      - (picrawler_services | map(attribute='mqtt_user') | list
+      - (picrawler_services | selectattr('mqtt_user', 'defined') | map(attribute='mqtt_user') | list
          + picrawler_sensors | map('regex_replace', '^(.*)$', 'sensor-\1') | list)
         | difference(mosquitto_users | default([]) | map(attribute='name') | list) | length == 0
     fail_msg: "Each service/sensor needs a matching entry in mosquitto_users (sensors: sensor-<name>)."
@@ -62,6 +62,12 @@
     name: "{{ picrawler_pip_packages }}"
     virtualenv: "{{ picrawler_venv }}"
 
+- name: Install agent python dependencies
+  ansible.builtin.pip:
+    name: "{{ picrawler_agent_pip_packages }}"
+    virtualenv: "{{ picrawler_venv }}"
+  when: picrawler_speech_enabled | bool
+
 - name: Install robot_hat and picrawler into the virtualenv
   ansible.builtin.include_tasks: pip_local.yml
   loop:
@@ -90,6 +96,21 @@
   loop_control:
     label: "{{ item.dest }}"
   notify: Restart picrawler
+
+- name: Write voice stack configs
+  ansible.builtin.template:
+    src: "{{ item }}.toml.j2"
+    dest: "{{ picrawler_config_dir }}/{{ item }}.toml"
+    owner: root
+    group: "{{ picrawler_user }}"
+    mode: "0640"
+  loop: [agent, voice]
+  when: picrawler_speech_enabled | bool
+  notify: Restart picrawler
+
+- name: Set up the voice stack
+  ansible.builtin.include_tasks: speech.yml
+  when: picrawler_speech_enabled | bool
 
 - name: Create vision model directory
   ansible.builtin.file:

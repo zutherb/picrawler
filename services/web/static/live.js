@@ -110,8 +110,43 @@ PC.on("status", (s) => {
   const padText = pad && pad.connected ? (pad.name || "connected") : "not connected";
   tiles.append(tile("Gamepad", padText, pad && pad.connected ? "ok" : ""));
   if (v.error) tiles.append(tile("Vision note", v.error, "warn"));
+  const speech = (s.sensors || {}).speech;
+  if (speech) tiles.append(tile("Microphone", online(speech) ? (speech.error ? "ASR error" : "listening") : "offline",
+                                !online(speech) ? "bad" : speech.error ? "warn" : "ok"));
+  const a = s.agent;
+  if (a) {
+    const text = online(a) ? (a.busy ? "thinking…" : "ready") : "offline";
+    tiles.append(tile("Agent", text, !online(a) ? "bad" : a.busy ? "warn" : "ok"));
+    document.getElementById("agent-state").textContent = online(a) ? `${text} · ${(a.brains || []).join(" → ")}` : "agent offline";
+  }
 });
 
 document.getElementById("stop-sit").addEventListener("click", () => PC.stop(true));
 
-PC.init("live").then(() => { startVideo(); requestAnimationFrame(draw); });
+// --- agent ---
+
+const agentReplies = document.getElementById("agent-replies");
+PC.on("agent", (r) => {
+  const meta = [r.source, r.brain, r.seconds != null ? `${r.seconds} s` : null].filter(Boolean).join(" · ");
+  agentReplies.prepend(PC.el("li", {}, PC.el("span", { class: "time" }, PC.time(r.ts)),
+    PC.el("span", { class: "muted" }, `${r.request} → `), PC.el("strong", {}, r.text), " ",
+    PC.el("span", { class: "tag" }, meta)));
+  while (agentReplies.children.length > 20) agentReplies.lastChild.remove();
+});
+document.getElementById("agent-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = document.getElementById("agent-text");
+  if (!input.value.trim()) return;
+  try {
+    await PC.api("POST", "/api/agent/ask", { text: input.value });
+    input.value = "";
+  } catch (err) {
+    PC.toast("Agent: " + err.message, true);
+  }
+});
+
+PC.init("live").then(() => {
+  if (PC.me.role === "admin") document.getElementById("agent-panel").classList.remove("hidden");
+  startVideo();
+  requestAnimationFrame(draw);
+});

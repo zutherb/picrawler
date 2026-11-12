@@ -1,0 +1,90 @@
+---
+# whisper.cpp (speech-to-text server), Piper (text-to-speech), agent model.
+
+- name: Install build tools for whisper.cpp
+  ansible.builtin.apt:
+    name: [build-essential, cmake]
+    state: present
+
+- name: Create speech and agent directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ picrawler_user }}"
+    group: "{{ picrawler_user }}"
+    mode: "0755"
+  loop:
+    - "{{ picrawler_speech_dir }}"
+    - "{{ picrawler_agent_dir }}"
+    - "{{ picrawler_agent_dir }}/cache"
+
+- name: Fetch whisper.cpp
+  ansible.builtin.git:
+    repo: "{{ picrawler_whisper_repo }}"
+    dest: "{{ picrawler_install_dir }}/whisper.cpp"
+    version: "{{ picrawler_whisper_version }}"
+    depth: 1
+  register: picrawler_whisper_src
+
+- name: Check for an existing whisper-server build
+  ansible.builtin.stat:
+    path: "{{ picrawler_install_dir }}/whisper.cpp/build/bin/whisper-server"
+  register: picrawler_whisper_prebuilt
+
+- name: Build whisper-server (takes a few minutes on the Pi)
+  ansible.builtin.shell: |
+    set -eu
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_TESTS=OFF
+    cmake --build build -j4 --config Release --target whisper-server
+  args:
+    chdir: "{{ picrawler_install_dir }}/whisper.cpp"
+    executable: /bin/bash
+  when: picrawler_whisper_src.changed or not picrawler_whisper_prebuilt.stat.exists
+  changed_when: true
+  notify: Restart picrawler
+
+- name: Check the whisper-server binary
+  ansible.builtin.stat:
+    path: "{{ picrawler_install_dir }}/whisper.cpp/build/bin/whisper-server"
+  register: picrawler_whisper_bin
+
+- name: Fail if whisper-server was not built
+  ansible.builtin.assert:
+    that: picrawler_whisper_bin.stat.exists
+    fail_msg: "whisper-server missing in build/bin; check the build output (binary name differs between versions)."
+    quiet: true
+
+- name: Download the whisper model
+  ansible.builtin.get_url:
+    url: "{{ picrawler_whisper_model_url }}"
+    dest: "{{ picrawler_speech_dir }}/{{ picrawler_whisper_model_url | basename }}"
+    owner: "{{ picrawler_user }}"
+    group: "{{ picrawler_user }}"
+    mode: "0644"
+
+- name: Install Piper
+  ansible.builtin.unarchive:
+    src: "{{ picrawler_piper_url }}"
+    dest: "{{ picrawler_install_dir }}"
+    remote_src: true
+    creates: "{{ picrawler_install_dir }}/piper/piper"
+
+- name: Download the Piper voice and its config
+  ansible.builtin.get_url:
+    url: "{{ item }}"
+    dest: "{{ picrawler_speech_dir }}/{{ item | basename }}"
+    owner: "{{ picrawler_user }}"
+    group: "{{ picrawler_user }}"
+    mode: "0644"
+  loop:
+    - "{{ picrawler_piper_voice_url }}"
+    - "{{ picrawler_piper_voice_url }}.json"
+
+- name: Download the agent model
+  ansible.builtin.get_url:
+    url: "{{ picrawler_agent_model_url }}"
+    dest: "{{ picrawler_agent_dir }}/{{ picrawler_agent_model_url | basename }}"
+    owner: "{{ picrawler_user }}"
+    group: "{{ picrawler_user }}"
+    mode: "0644"
+  when: picrawler_agent_model_url | length > 0

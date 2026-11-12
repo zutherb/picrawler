@@ -97,6 +97,7 @@ class WebApp:
         r.add_get("/api/log/labels", self.log_labels)
         r.add_post("/api/stop", self.stop)
         r.add_post("/api/vision/mode", self.vision_mode)
+        r.add_post("/api/agent/ask", self.agent_ask)
         r.add_get("/api/bluetooth", self.bt_devices)
         r.add_post("/api/bluetooth/scan", self.bt_scan)
         r.add_post("/api/bluetooth/{action}", self.bt_action)
@@ -284,6 +285,15 @@ class WebApp:
         if mode not in VISION_MODES:
             return json_error(400, "unknown mode")
         self.bus.publish("vision/mode", {"id": os.urandom(8).hex(), "mode": mode, "ts": time.time()}, 1, False)
+        return web.json_response({"ok": True})
+
+    @requires_admin
+    async def agent_ask(self, request):
+        text = (await read_json(request)).get("text")
+        if not isinstance(text, str) or not text.strip():
+            return json_error(400, "text required")
+        self.bus.publish("agent/ask", {"id": os.urandom(8).hex(), "text": text.strip()[:500],
+                                       "user": request[SESSION]["user"], "ts": time.time()}, 1, False)
         return web.json_response({"ok": True})
 
     # --- bluetooth ---

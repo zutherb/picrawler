@@ -31,6 +31,7 @@ services/         # python -m services.<name> --config x.toml [--fake]; needs Py
   sensor_ultrasonic/, sensor_gamepad/
   vision/         # camera, MJPEG on 127.0.0.1:8081, Edge TPU detector
   web/            # aiohttp UI: login, SSE, object log, admin; static/ has no inline JS (CSP)
+  sensor_speech/  # mic + VAD + whisper-server client; agent/ (World, tools, brains); voice/ (Piper)
 deploy/ansible/   # Pi provisioning; unit names/configs must match services/
 tests/            # unittest; tests/fake_robot_hat.py stands in for the hardware; aiohttp/numpy tests skip if missing
 examples/         # motion demos, must run on the robot with sudo
@@ -45,6 +46,7 @@ examples/         # motion demos, must run on the robot with sudo
 - Only the `MotionExecutor` worker thread may call the `Picrawler`; it checks for abort between frames.
 - Service logic (`BodyAdapter`, `Arbiter`) is transport-agnostic: `on_message(suffix, payload, retain)`, `tick()`, injected `publish(suffix, payload, qos, retain)` and clocks. Keep paho inside `services/common/mqtt.py` so tests need no broker.
 - `cmd/stop` must never be rejected. GOAL commands need a recent `cmd/heartbeat`.
+- Agent tools return English text for the model; spoken fixed replies come from a language table. German command words in `KeywordBrain` are data, keep them.
 - MQTT topics/ACLs are mirrored in `deploy/ansible/roles/mosquitto/templates/picrawler.acl.j2`; update both together.
 
 ## Calibration data

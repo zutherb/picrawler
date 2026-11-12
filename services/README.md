@@ -11,7 +11,10 @@ this (units from `deploy/ansible`). Background: `docs/target-architecture.md`.
 | `services.sensor_ultrasonic` | measures and publishes the distance | `sensor-ultrasonic` |
 | `services.sensor_gamepad` | reads any Bluetooth/USB gamepad via evdev, publishes stick and buttons | `sensor-gamepad` |
 | `services.vision` | camera, MJPEG stream on 127.0.0.1:8081, object detection on the Coral | `sensor-vision` |
-| `services.web` | login, live video with boxes, object log, emergency stop, admin (Bluetooth, vision mode, services, metrics) | `ui` |
+| `services.web` | login, live video with boxes, object log, emergency stop, agent input, admin (Bluetooth, vision mode, services, metrics) | `ui` |
+| `services.sensor_speech` | USB microphone, voice activity detection, whisper.cpp → text | `sensor-speech` |
+| `services.agent` | offline language model (Gemma 4 E2B via LiteRT-LM) with robot tools; keyword parser as fallback | `agent` |
+| `services.voice` | speaks the agent's replies with Piper | `voice` |
 | `services.common` | config, MQTT connection, message validation | – |
 
 The logic of each service lives in a class without networking
@@ -70,6 +73,23 @@ Pairing a controller: Admin → "Search", put the pad into pairing mode,
 "Pair". The "Gamepad input" panel shows the button names for
 `picrawler_manual_buttons`.
 
+## Voice and agent
+
+Speak with the wake word first: "Crawler, geh zwei Schritte vorwärts",
+"Crawler, such die Katze", "Crawler, was siehst du?". "Stopp" or "halt"
+always stops at once, without waiting for the model. Admins can also type
+requests on the live page.
+
+The agent model is a `.litertlm` file of Gemma 4 E2B from the
+`litert-community` organisation on Hugging Face; set its download URL as
+`picrawler_agent_model_url`. Without it the agent still understands simple
+commands through the keyword parser. A stronger model on a Mac can be added
+with `picrawler_agent_remote_url` (OpenAI-compatible server, e.g.
+`llama-server` or Ollama); it is skipped while unreachable.
+
+Needs a USB microphone (`arecord -l` must list it). The speaker is the
+Robot HAT's.
+
 ## On a Mac without a Pi
 
 The web UI alone, without broker, Bluetooth or systemd (random detections,
@@ -105,6 +125,9 @@ python3 -m services.arbiter --config arbiter-dev.toml   # with [[rule]], [manual
 python3 -m services.sensor_gamepad --config /tmp/dev.toml --fake
 python3 -m services.vision --config /tmp/dev.toml --fake
 python3 -m services.web --config web-dev.toml --fake    # web.toml plus the [mqtt] section
+python3 -m services.sensor_speech --config /tmp/dev.toml --fake   # scripted phrases
+python3 -m services.agent --config /tmp/dev.toml --fake           # keyword parser only
+python3 -m services.voice --config /tmp/dev.toml --fake           # prints instead of speaking
 ```
 
 `--fake` replaces hardware: servo stand-in, a distance swinging between 10

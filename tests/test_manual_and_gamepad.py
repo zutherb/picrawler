@@ -121,3 +121,19 @@ class ManualTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AgentPausesWanderTest(unittest.TestCase):
+
+    def test_wander_waits_while_agent_busy(self):
+        sent = []
+        arbiter = Arbiter(lambda *m: sent.append(m), {"wander": {"enabled": True}}, wall=Clock(NOW), mono=Clock(100.0))
+        arbiter.on_message("status", {"status": "online"})
+        arbiter.on_message("state/motion", {"status": "idle", "queue_len": 0})
+        arbiter.on_message("agent/status", {"status": "online", "busy": True})
+        arbiter.on_message("sensor/ultrasonic/distance", {"cm": 80})
+        arbiter.tick()
+        self.assertEqual([m for m in sent if m[0] == "cmd/action"], [])
+        arbiter.on_message("agent/status", {"status": "online", "busy": False})
+        arbiter.tick()
+        self.assertEqual(len([m for m in sent if m[0] == "cmd/action"]), 1)

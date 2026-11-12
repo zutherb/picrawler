@@ -27,7 +27,8 @@ from .state import LiveState
 from .store import LogStore
 from .system import FakeSystem, System
 
-SUBSCRIPTIONS = ("status", "state/#", "arbiter/status", "sensor/#", "event/#")
+SUBSCRIPTIONS = ("status", "state/#", "arbiter/status", "sensor/#", "event/#", "agent/status", "agent/reply",
+                 "voice/status")
 TICK_S = 0.2
 
 
@@ -54,6 +55,10 @@ class FakeFeed:
     def publish(self, suffix, payload, qos=0, retain=False):
         if suffix == "cmd/stop":
             self.inject("event/stop", {"reason": payload.get("reason"), "sit": payload.get("sit"), "ts": time.time()})
+        elif suffix == "agent/ask":
+            self.inject("agent/reply", {"text": "(fake) Okay: %s" % payload.get("text"), "request": payload.get("text"),
+                                        "source": payload.get("user"), "brain": "fake", "seconds": 0.1,
+                                        "ts": time.time()})
         elif suffix == "vision/mode":
             if payload.get("mode") in ("detect", "off"):
                 self.mode = payload["mode"]
@@ -73,6 +78,7 @@ class FakeFeed:
         self.inject("state/motion", {"status": "idle", "queue_len": 0})
         self.inject("sensor/ultrasonic/status", {"status": "online"})
         self.inject("sensor/gamepad/status", {"status": "online", "connected": True, "name": "Fake gamepad"})
+        self.inject("agent/status", {"status": "online", "busy": False, "brains": ["fake"]})
         self.vision_status()
         t = 0
         while True:

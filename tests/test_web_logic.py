@@ -97,6 +97,15 @@ class StoreAndStateTest(unittest.TestCase):
         self.assertEqual([(r["label"], r["detail"]) for r in rows],
                          [("rejected", "cmd/action: no heartbeat"), ("stop", "obstacle")])
 
+    def test_agent_replies_are_logged_room_talk_is_not(self):
+        self.state.on_message("sensor/speech/text", {"text": "private chat in the room"})
+        self.state.on_message("agent/reply", {"text": "Found cat.", "request": "such die Katze", "brain": "litert-lm",
+                                              "seconds": 6.2, "ts": 1001.0})
+        rows = self.store.query()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["detail"], "such die Katze → Found cat. [litert-lm, 6.2 s]")
+        self.assertIn("agent", [e for e, _ in self.pushed])
+
     def test_status_snapshot_pushed_once_per_tick(self):
         self.state.on_message("status", {"status": "online"})
         self.state.on_message("sensor/gamepad/status", {"status": "online", "connected": True})

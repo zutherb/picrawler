@@ -54,6 +54,10 @@ sudo systemctl stop picrawler.target
 | `picrawler_web_tls` | `true` | self-signed HTTPS for the web UI on port 8080 |
 | `picrawler_manual_buttons` | SOUTH stand, EAST sit, NORTH wave | gamepad button → action; names shown on the admin page |
 | `picrawler_vision_download_models` | `true` | fetch the Coral test model and COCO labels |
+| `picrawler_speech_enabled` | `true` | voice stack: builds whisper.cpp, installs Piper and litert-lm-api, runs whisper/agent/voice and the speech sensor |
+| `picrawler_agent_model_url` | `""` | `.litertlm` download URL (Gemma 4 E2B); empty = keyword parser only |
+| `picrawler_agent_remote_url` | `""` | optional OpenAI-compatible server in the LAN, tried first |
+| `picrawler_whisper_model_url` | ggml-base | `ggml-small.bin` for better German, about 3x slower |
 | `mosquitto_users` | body, arbiter, sensors, ui | MQTT accounts with role → ACL |
 | `mosquitto_listen_address` | `127.0.0.1` | non-local only with `mosquitto_allow_plaintext_remote: true` (no TLS yet) |
 | `picrawler_robot_hat_version` | `2.5.x` | pin to a commit SHA for reproducible installs |

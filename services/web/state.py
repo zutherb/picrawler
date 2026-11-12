@@ -19,7 +19,7 @@ class LiveState:
         self._wall = wall
         self.snapshot = {
             "body": None, "motion": None, "arbiter": None, "vision": None,
-            "sensors": {}, "gamepad": None, "distance_cm": None,
+            "sensors": {}, "gamepad": None, "distance_cm": None, "agent": None, "voice": None,
         }
         self.vision_mode = "detect"
         self._dirty = True
@@ -36,6 +36,12 @@ class LiveState:
             self._set("motion", payload)
         elif suffix == "arbiter/status":
             self._set("arbiter", payload)
+        elif suffix == "agent/status":
+            self._set("agent", payload)
+        elif suffix == "voice/status":
+            self._set("voice", payload)
+        elif suffix == "agent/reply" and not retain:
+            self._log_agent(payload)
         elif suffix == "sensor/vision/status":
             self._set("vision", payload)
             self.vision_mode = payload.get("mode", self.vision_mode)
@@ -76,6 +82,20 @@ class LiveState:
         row_id = self.store.add_event(kind, detail, ts)
         self.push("log", {"id": row_id, "kind": "event", "label": kind, "start": ts, "end": None,
                           "max_score": None, "max_count": None, "mode": None, "detail": detail})
+
+    def _log_agent(self, payload):
+        # Only requests the agent acted on; plain room talk is never stored.
+        request, reply = str(payload.get("request", ""))[:200], str(payload.get("text", ""))[:300]
+        detail = "%s → %s" % (request, reply)
+        if payload.get("brain"):
+            detail += " [%s%s]" % (payload["brain"], ", %.1f s" % payload["seconds"]
+                                   if isinstance(payload.get("seconds"), (int, float)) else "")
+        ts = payload.get("ts") if isinstance(payload.get("ts"), (int, float)) else self._wall()
+        row_id = self.store.add_event("agent", detail, ts)
+        row = {"id": row_id, "kind": "event", "label": "agent", "start": ts, "end": None, "max_score": None,
+               "max_count": None, "mode": None, "detail": detail}
+        self.push("log", row)
+        self.push("agent", payload)
 
     def _handle(self, events):
         for what, sighting in events:

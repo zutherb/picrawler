@@ -95,6 +95,7 @@ class Arbiter:
         self._sensor_seen = {}            # sensor -> mono time of last reading
         self._sensor_offline = set()
         self.body_online = False
+        self.agent_busy = False           # the language model agent is acting
         self.motion = {}                  # last state/motion payload
         # Manual control comes first: while it is active, wander pauses.
         self.manual = Manual(self, cfg.get("manual", {}))
@@ -117,6 +118,9 @@ class Arbiter:
             if isinstance(payload, dict):
                 for behavior in self.behaviors:
                     behavior.on_rejected(payload)
+            return
+        if suffix == "agent/status":
+            self.agent_busy = isinstance(payload, dict) and payload.get("status") == "online" and bool(payload.get("busy"))
             return
         sensor = sensor_of(suffix)
         if sensor is None:
@@ -306,7 +310,7 @@ class Wander(Behavior):
 
     Off by default. Only acts on fresh distance readings while the body is
     online and idle, one command at a time, and pauses while the gamepad
-    is in use. The safety stop rule still does the actual emergency stop.
+    or the agent is in use. The safety stop rule still does the actual emergency stop.
     """
 
     def __init__(self, arbiter, cfg):
@@ -329,6 +333,6 @@ class Wander(Behavior):
         a = self.arbiter
         if not self.enabled or self.distance is None or not a.sensor_fresh(self.sensor):
             return
-        if a.manual.active() or not self.ready():
+        if a.manual.active() or a.agent_busy or not self.ready():
             return
         self.send("forward" if self.distance > self.clear_cm else self.turn, self.speed)

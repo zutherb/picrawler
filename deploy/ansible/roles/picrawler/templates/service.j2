@@ -13,7 +13,17 @@ User={{ service.user | default(picrawler_user) }}
 Group={{ service.user | default(picrawler_user) }}
 SupplementaryGroups={{ service.groups | default(['i2c', 'gpio']) | join(' ') }}
 WorkingDirectory={{ picrawler_src_dir }}
+{% if service.exec is defined %}
+ExecStart={{ service.exec }}
+{% else %}
 ExecStart={{ picrawler_venv }}/bin/python -m {{ service.module }} --config {{ picrawler_config_dir }}/{{ service.name }}.toml
+{% endif %}
+{% if service.nice is defined %}
+Nice={{ service.nice }}
+{% endif %}
+{% if service.cpu_quota is defined %}
+CPUQuota={{ service.cpu_quota }}
+{% endif %}
 # SIGTERM -> controlled shutdown (body: stop and sit down)
 KillSignal=SIGTERM
 TimeoutStopSec={{ service.stop_timeout | default(10) }}

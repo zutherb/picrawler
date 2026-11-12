@@ -32,7 +32,7 @@ const PC = {
 
   connect() {
     const source = new EventSource("/events");
-    for (const event of ["status", "history", "detections", "log", "gamepad", "bluetooth"]) {
+    for (const event of ["status", "history", "detections", "log", "gamepad", "bluetooth", "agent"]) {
       source.addEventListener(event, (e) => {
         const data = JSON.parse(e.data);
         for (const fn of PC.handlers[event] || []) fn(data);

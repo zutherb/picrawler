@@ -26,6 +26,17 @@
         <ul class="feed" id="feed"></ul>
       </section>
     </div>
+    <section class="panel admin-only hidden" id="agent-panel">
+      <div class="row">
+        <h2>Agent</h2>
+        <span class="muted" id="agent-state"></span>
+      </div>
+      <form class="row" id="agent-form">
+        <input id="agent-text" placeholder="e.g. find the cat / walk two steps forward" maxlength="500" autocomplete="off">
+        <button class="primary" type="submit">Send</button>
+      </form>
+      <ul class="feed" id="agent-replies"></ul>
+    </section>
     <section class="panel">
       <div class="row">
         <h2>Status</h2>

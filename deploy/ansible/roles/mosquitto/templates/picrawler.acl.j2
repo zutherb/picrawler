@@ -17,10 +17,13 @@ topic read {{ p }}/event/#
 topic write {{ p }}/cmd/#
 topic write {{ p }}/vision/mode
 topic write {{ p }}/arbiter/status
+topic read {{ p }}/agent/status
 {% elif user.role == 'sensor' %}
 topic write {{ p }}/sensor/{{ user.sensor }}/#
 {% if user.sensor == 'vision' %}
 topic read {{ p }}/vision/mode
+{% elif user.sensor == 'speech' %}
+topic read {{ p }}/voice/speaking
 {% endif %}
 {% elif user.role == 'ui' %}
 topic read {{ p }}/state/#
@@ -33,5 +36,21 @@ topic write {{ p }}/cmd/heartbeat
 topic write {{ p }}/vision/mode
 topic read {{ p }}/arbiter/status
 topic write {{ p }}/web/status
+topic write {{ p }}/agent/ask
+topic read {{ p }}/agent/#
+topic read {{ p }}/voice/status
+{% elif user.role == 'agent' %}
+{# a goal source like the UI: may command and stop, never state or sensors #}
+topic read {{ p }}/status
+topic read {{ p }}/state/motion
+topic read {{ p }}/event/#
+topic read {{ p }}/sensor/#
+topic read {{ p }}/agent/ask
+topic write {{ p }}/cmd/action
+topic write {{ p }}/cmd/stop
+topic write {{ p }}/agent/#
+{% elif user.role == 'voice' %}
+topic read {{ p }}/agent/reply
+topic write {{ p }}/voice/#
 {% endif %}
 {% endfor %}

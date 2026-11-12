@@ -135,6 +135,7 @@ pre.journal {
 }
 .toast.error { border-color: var(--bad); }
 
+#agent-text { flex: 1; min-width: 200px; }
 .login { max-width: 360px; margin: 12vh auto; }
 .login form { display: grid; gap: 10px; }
 .login .error { color: var(--bad); }

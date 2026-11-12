@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+{% set mqtt_user = 'agent' %}
+{% include '_mqtt.toml.j2' %}
+
+[agent]
+language = "{{ picrawler_speech_language }}"
+wake_words = {{ picrawler_agent_wake_words | to_json }}
+require_wake_word = true
+speed = 60
+{% if picrawler_agent_model_url | length > 0 %}
+
+[litert]
+model = "{{ picrawler_agent_dir }}/{{ picrawler_agent_model_url | basename }}"
+cache_dir = "{{ picrawler_agent_dir }}/cache"
+{% endif %}
+{% if picrawler_agent_remote_url | length > 0 %}
+
+[remote]
+url = "{{ picrawler_agent_remote_url }}"
+model = "{{ picrawler_agent_remote_model }}"
+timeout_s = 20
+{% endif %}

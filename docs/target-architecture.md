@@ -559,6 +559,61 @@ safety layer.
   its button names differ, read them on the admin page and set
   `picrawler_manual_buttons`.
 
+## 8a. Voice and agent
+
+Offline voice control and a language-model agent. Everything runs on the Pi;
+an optional stronger model on a machine in the home network is used when it
+is reachable. No internet.
+
+```
+USB mic ─► sensor_speech ─(sensor/speech/text)─► agent ─(cmd/action, cmd/stop)─► body
+           VAD + whisper.cpp                      │  Gemma 4 E2B (LiteRT-LM)
+                                                  │  tools: walk, turn, do_action,
+web UI ──────────(agent/ask)──────────────────────┤         stop, look, distance, search
+                                                  └─(agent/reply)─► voice (Piper) ─► speaker
+```
+
+| Service | Job |
+|---|---|
+| `whisper` | whisper.cpp `whisper-server` on 127.0.0.1:8082, German, model loaded once |
+| `sensor_speech` | USB microphone (PyAudio), energy VAD with adaptive noise floor, sends each utterance to whisper, publishes the text. Mutes itself while `voice/speaking` |
+| `agent` | wake word filter, stop fast path, one request at a time, brains in order: `[remote]` (OpenAI-compatible, e.g. llama-server/Ollama on a Mac), `[litert]` (Gemma 4 E2B), keyword parser |
+| `voice` | Piper TTS, plays replies with `aplay`, switches on the Robot HAT amplifier |
+
+Decisions:
+
+- **Model:** Gemma 4 E2B via LiteRT-LM on the CPU (~1.4 GB RAM, ~9 tok/s
+  decode, ~99 tok/s prefill per the Raspberry Pi benchmark). Native tool
+  calling; LiteRT-LM runs the Python tool functions itself. Qwen 3.5 2B is
+  the alternative (slower, tool calling not documented for LiteRT).
+- **Speech-to-text: whisper.cpp**, not Gemma's audio input. Gemma 4 E2B
+  accepts audio, but no Pi benchmark or LiteRT-LM audio documentation for
+  the Pi was found; Google's own Pi demo uses a separate ASR.
+- **Wake word in the transcript** ("Crawler, …") instead of a wake-word
+  model: no extra model, whisper only runs when the VAD hears speech.
+  Plain room talk is transcribed but neither acted on nor logged.
+- **Stop never waits for the model:** "stopp", "halt" etc. trigger
+  `cmd/stop` directly and drop queued requests.
+- **Tools do the loops, the model decides:** `search` turns step by step
+  until the label is detected; `walk forward` refuses below 20 cm. Commands
+  are plain goals, so the arbiter's obstacle stop and the body's lockout
+  stay in charge; while the agent is busy, wander pauses.
+- **CPU budget:** agent and whisper run with `Nice=10`, the agent with
+  `CPUQuota=300%`, leaving a core for body, vision and the stream. Active
+  cooling is required.
+- **Language:** the model answers in the language of the request; fixed
+  replies come from a table (`[agent] language = "de"`).
+
+Topics: `sensor/speech/text` `{"text", "language", "duration_s", "asr_s"}`,
+`sensor/speech/status`, `agent/ask` `{"text", "user"}` (web UI, admin),
+`agent/reply` `{"text", "request", "source", "brain", "seconds"}`,
+`agent/status` (retained, `busy`), `voice/speaking` `{"speaking"}`,
+`voice/status`.
+
+Not measured yet (milestone M-A1): end-to-end latency on the Pi, tool-call
+accuracy of Gemma 4 E2B with these tools, whisper base vs small for German,
+CPU contention with vision running.
+
 ## 9. Configuration (`body.toml`)
 
 ```toml
@@ -612,6 +667,7 @@ actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wa
 | M7 | `pose` gestures + imprinting | Raise arm → stand up, wave → wave, learned object is found |
 | M-W1 ✅ (device test pending) | web-service: login, live page, object log, emergency stop (can be developed independently of M5 with `--fake`) | Sighting tests green, stream and log in the browser, emergency stop stops the crawler, viewer cannot access admin pages |
 | M-W2 ✅ (device test pending) | Admin: Bluetooth, vision mode, services, system + gamepad-service | Controller can be paired via the page and reconnects by itself after reboot, crawler controllable via gamepad, ultrasonic stop also takes effect then |
+| M-A1 ✅ (device test pending) | Voice and agent: sensor_speech, whisper, agent (Gemma 4 E2B), voice | "Crawler, such die Katze" turns until a cat is detected and answers by voice; "stopp" stops within one frame; latency and tool-call accuracy recorded here |
 
 ## 12. Hardware (decided)
 

@@ -9,8 +9,8 @@ PartOf=picrawler.target
 Type=simple
 User={{ picrawler_user }}
 Group={{ picrawler_user }}
-# input: gamepads under /dev/input
-SupplementaryGroups=i2c gpio input
+# input: gamepads under /dev/input, audio: USB microphone
+SupplementaryGroups=i2c gpio input audio
 WorkingDirectory={{ picrawler_src_dir }}
 ExecStart={{ picrawler_venv }}/bin/python -m services.sensor_%i --config {{ picrawler_config_dir }}/sensor-%i.toml
 Restart=always

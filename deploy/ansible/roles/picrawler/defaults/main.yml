@@ -24,12 +24,17 @@ picrawler_robot_hat_install_overlays: true
 picrawler_pip_packages:
   - smbus2
   - paho-mqtt>=2,<3
+# LiteRT-LM Python API for the agent (Gemma 4 E2B on the CPU)
+picrawler_agent_pip_packages:
+  - litert-lm-api
 
 # Start/enable the units. Starting the body initializes the servos, so
 # enable this after a first manual test on the robot.
 picrawler_services_start: false
 
-picrawler_services:
+picrawler_services: "{{ picrawler_core_services + (picrawler_speech_services if picrawler_speech_enabled | bool else []) }}"
+
+picrawler_core_services:
   - name: body
     module: services.body
     description: PiCrawler body (servos, executor, MQTT adapter)
@@ -55,6 +60,38 @@ picrawler_services:
     mqtt_user: ui
     user: "{{ picrawler_web_user }}"
     groups: [bluetooth, systemd-journal, video]
+    restart: on-failure
+    stop_timeout: 5
+
+# Voice stack: USB microphone -> whisper.cpp -> agent (Gemma 4 E2B) -> Piper.
+picrawler_speech_enabled: true
+picrawler_speech_services:
+  - name: whisper
+    description: whisper.cpp speech-to-text server (localhost only)
+    exec: >-
+      {{ picrawler_install_dir }}/whisper.cpp/build/bin/whisper-server
+      -m {{ picrawler_speech_dir }}/{{ picrawler_whisper_model_url | basename }}
+      -l {{ picrawler_speech_language }} -t 3 --host 127.0.0.1 --port 8082
+    groups: []
+    nice: 10
+    restart: on-failure
+    stop_timeout: 5
+  - name: agent
+    module: services.agent
+    description: PiCrawler agent (offline language model with robot tools)
+    mqtt_user: agent
+    groups: []
+    nice: 10
+    # leave one core for body, vision and the stream
+    cpu_quota: 300%
+    restart: on-failure
+    stop_timeout: 10
+  - name: voice
+    module: services.voice
+    description: PiCrawler voice (Piper text-to-speech)
+    mqtt_user: voice
+    groups: [audio, gpio]
+    nice: 5
     restart: on-failure
     stop_timeout: 5
 
@@ -103,6 +140,32 @@ picrawler_sensor_settings:
     rate_hz: 10
     device_name: ""        # substring of the pad name; empty = first gamepad found
     deadzone: 0.15
+  speech:
+    device_name: ""        # substring of the microphone name; empty = first input device
+    language: "{{ picrawler_speech_language }}"
+    whisper_url: http://127.0.0.1:8082/inference
+    vad_ratio: 3.0
+    end_ms: 700
+
+# Speech (whisper.cpp) and voice (Piper)
+picrawler_speech_language: de
+picrawler_speech_dir: "{{ picrawler_state_dir }}/speech"
+picrawler_whisper_repo: https://github.com/ggml-org/whisper.cpp.git
+picrawler_whisper_version: v1.7.4
+# base: fast; small: better German, about 3x slower
+picrawler_whisper_model_url: https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+picrawler_piper_url: https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz
+picrawler_piper_voice_url: https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx
+
+# Agent: .litertlm model file (Gemma 4 E2B from the litert-community
+# organisation on Hugging Face). Empty: only the keyword parser runs.
+picrawler_agent_model_url: ""
+picrawler_agent_dir: "{{ picrawler_state_dir }}/agent"
+# Optional stronger brain in the LAN (OpenAI-compatible, e.g. llama-server
+# or Ollama on a Mac); tried first, skipped while unreachable.
+picrawler_agent_remote_url: ""
+picrawler_agent_remote_model: ""
+picrawler_agent_wake_words: [crawler, krabbler, roboter]
 
 # vision.toml
 picrawler_vision_mode: detect

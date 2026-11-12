@@ -78,7 +78,7 @@ if AioHTTPTestCase is not None:
             self.assertEqual(self.bus.sent[-1][0], "cmd/stop")
             self.assertEqual(self.bus.sent[-1][1]["sit"], True)
             for path, body in (("/api/vision/mode", {"mode": "off"}), ("/api/system/restart", {"unit": "picrawler-body.service"}),
-                               ("/api/bluetooth/scan", {})):
+                               ("/api/bluetooth/scan", {}), ("/api/agent/ask", {"text": "walk"})):
                 self.assertEqual((await self.post(path, body, csrf)).status, 403, path)
             self.assertEqual((await self.client.get("/api/system")).status, 403)
             resp = await self.client.get("/admin", allow_redirects=False)
@@ -95,6 +95,10 @@ if AioHTTPTestCase is not None:
             self.assertEqual((await self.post("/api/vision/mode", {"mode": "pose"}, csrf)).status, 200)
             self.assertEqual(self.bus.sent[-1][1]["mode"], "pose")
             self.assertEqual((await self.post("/api/vision/mode", {"mode": "x"}, csrf)).status, 400)
+            self.assertEqual((await self.post("/api/agent/ask", {"text": "such die Katze"}, csrf)).status, 200)
+            self.assertEqual(self.bus.sent[-1][0], "agent/ask")
+            self.assertEqual(self.bus.sent[-1][1]["user"], "anna")
+            self.assertEqual((await self.post("/api/agent/ask", {"text": "  "}, csrf)).status, 400)
             self.assertEqual((await self.post("/api/system/restart", {"unit": "picrawler-body.service"}, csrf)).status, 200)
             self.assertEqual((await self.post("/api/system/restart", {"unit": "ssh.service"}, csrf)).status, 400)
             self.assertEqual(self.system.restarted, ["picrawler-body.service"])
