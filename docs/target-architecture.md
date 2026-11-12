@@ -1,6 +1,6 @@
 # Target architecture: sensor-driven body over MQTT
 
-Status: draft · As of: 2026-11-11 · Branch: `motion-framework`
+Status: draft · As of: 2026-11-12 · Branch: `motion-framework`
 
 ## 1. Goal
 
@@ -34,27 +34,43 @@ change the motion core.
 ## 2. Components
 
 ```
- Sensor nodes                 Arbiter                     Body-Service (Pi)
-┌──────────────┐ sensor/*  ┌──────────────┐  cmd/*   ┌──────────────────────────┐
-│ ultrasonic   │ ────────► │ Rules        │ ───────► │ services.body (Adapter)  │
-│ imu          │           │ Priorities   │          │   Validation, Dedupe     │
-│ vision+Coral │           │              │ ◄─────── │   Watchdog               │
-│ remote       │           └──────────────┘ state/*  │ picrawler.executor       │
-└──────────────┘                                     │   MotionExecutor thread  │
-                                                     │ picrawler.Picrawler      │
-                                                     └──────────────────────────┘
+ Sensors / inputs               Arbiter                   Body service (Pi)
+┌────────────────────┐ sensor/* ┌──────────────┐  cmd/*  ┌──────────────────────────┐
+│ ultrasonic         │ ───────► │ Rules        │ ──────► │ services.body (adapter)  │
+│ gamepad            │          │ Manual       │         │   validation, watchdog   │
+│ vision + Coral     │          │ Wander       │ ◄────── │   battery (ADC A4)       │
+│ web remote         │          │ Heartbeat    │ state/* │ picrawler.executor       │
+└────────────────────┘          └──────────────┘         │   MotionExecutor thread  │
+                                                         │ picrawler.Picrawler      │
+ USB mic ─► sensor_speech ─► agent ──── cmd/action, ────►│                          │
+            (whisper.cpp)    (Gemma)    cmd/stop         └──────────────────────────┘
+                               └─► agent/reply ─► voice (Piper)
+
+ Observers: web (UI, admin, MQTT debug, OLED mirror) · display (OLED, works without MQTT)
+ Clients:   browser, iPhone/iPad app (same HTTP API), found via avahi or the robot's hotspot
 ```
+
+All services run on the Pi and talk through the local Mosquitto broker
+(per-role users and ACLs, section 4). Sensors on other devices (e.g. ESP32)
+connect to the same broker with the `sensor` role.
 
 | Component | Location | Responsibility | Must not |
 |---|---|---|---|
 | `picrawler` (core) | this repo | Kinematics, gaits, servos | import MQTT, start threads |
 | `picrawler.executor` | this repo | Execute commands one after another, interruptible between frames | network access |
-| `services.body` | this repo, own process | MQTT ↔ executor, validation, watchdog, status | drive servos bypassing the executor |
-| `services.arbiter` | this repo, own process | Sensor facts → commands by priority, heartbeat | pass through `cmd/*` from sensors |
-| Sensor nodes | anywhere | Publish measurements | publish under `cmd/*` |
-| `vision-service` | Pi with camera + Coral | Camera, video stream (local only), inference on the TPU, publish detections | decide behaviour, send commands |
-| `web-service` | Pi | Login, stream proxy, object log, emergency stop, admin (Bluetooth, vision mode, services) | drive servos or camera directly |
-| `gamepad-service` | Pi | Read Bluetooth controller, publish inputs | publish under `cmd/*` |
+| `services.body` | own process | MQTT ↔ executor, validation, watchdog, status, battery protection | drive servos bypassing the executor |
+| `services.arbiter` | own process | Sensor facts → commands by priority, heartbeat, Manual (gamepad, web remote), Wander | pass through `cmd/*` from sensors |
+| `services.sensor_ultrasonic` | own process | Publish distances | publish under `cmd/*` |
+| `services.sensor_gamepad` | own process | Read any evdev controller, publish normalized inputs (section 8.8) | publish under `cmd/*` |
+| Other sensor nodes | anywhere | Publish measurements | publish under `cmd/*` |
+| `services.vision` | Pi with camera + Coral | Camera, MJPEG stream (127.0.0.1 only), inference on the TPU, publish detections (section 7) | decide behaviour, send commands |
+| `services.web` | own process | Login, live page, stream proxy, object log, remote, emergency stop, admin, MQTT debug, OLED mirror (section 8) | drive servos or camera directly |
+| `services.sensor_speech` | own process | Microphone, VAD, whisper.cpp client, publish transcripts (section 8a) | send commands |
+| `services.agent` | own process | Wake word, stop fast path, language model with tools; sends goals as `cmd/action` / `cmd/stop` (section 8a) | bypass the arbiter's reflexes or the body's lockout |
+| `services.voice` | own process | Speak replies with Piper | — |
+| `services.display` | own process | OLED status from `/proc` and `/sys`, battery from MQTT, publish `display/frame` (section 12) | depend on MQTT for its basic picture |
+| `netwatch` | Ansible `network` role | Wi-Fi hotspot fallback, state in `/run/picrawler/network.json` (section 12) | — |
+| iOS app | `apps/ios` | Remote control via the web service's HTTP API (section 12) | talk MQTT or reach the servos another way |
 
 Package structure:
 
@@ -62,11 +78,11 @@ Package structure:
 picrawler/
   kinematics.py
   gaits.py
-  picrawler.py        # + iter_action()
-  executor.py         # new
+  picrawler.py        # Picrawler, iter_action()
+  executor.py         # MotionExecutor
 services/             # one process per service: python -m services.<name> --config …
-  common/             # config.py, mqtt.py (paho wrapper), schema.py (payload validation)
-  body/               # adapter.py (BodyAdapter), __main__.py
+  common/             # config.py, mqtt.py (paho wrapper), schema.py (payload validation), metrics.py
+  body/               # adapter.py (BodyAdapter), battery.py, __main__.py
   arbiter/            # arbiter.py (rules, Manual, Wander), __main__.py
   sensor_ultrasonic/  # __main__.py
   sensor_gamepad/     # gamepad.py (normalization), __main__.py (evdev), section 8.8
@@ -79,12 +95,19 @@ services/             # one process per service: python -m services.<name> --con
     app.py            # aiohttp: routes, login, SSE, stream proxy
     auth.py           # scrypt, sessions, rate limit; hashpw.py prints a hash
     state.py          # MQTT messages → status snapshot, log, SSE pushes
+    monitor.py        # recent MQTT traffic for the debug page
     sightings.py      # detections → sightings (object log)
     store.py          # SQLite
     bluetooth.py      # bluetoothctl
-    system.py         # units/journal/power via systemctl + polkit
-    metrics.py        # CPU, memory, disk, load from /proc
-    static/           # HTML, CSS, JS, without CDN
+    system.py         # units/journal/power via systemctl + polkit, system info
+    static/           # HTML, CSS, JS, without CDN or inline scripts (CSP)
+  sensor_speech/      # audio.py (mic + VAD), asr.py (whisper-server client)
+  agent/              # agent.py, brains.py (remote, LiteRT-LM, keywords), tools.py, world.py
+  voice/              # Piper TTS
+  display/            # sysinfo.py, render.py (128x64 1-bit), splash.py, assets/
+apps/
+  ios/                # SwiftUI app, XcodeGen project.yml
+deploy/ansible/       # roles: base, network, mosquitto, storage, picrawler
 tests/
 ```
 
@@ -774,12 +797,11 @@ actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wa
 
 ## 13. Open questions
 
-- Which sensors run on which device? If all are attached to the Pi, an
-  in-process event bus is enough at first, and MQTT only comes with M2.
-- Where does the broker run (on the Pi itself or another machine on the network)?
 - How long does a frame actually take at typical `speed`? This determines
   whether the reaction time of a stop is sufficient.
 - Should Home Assistant or similar be connected in addition to the own web interface (section 8)?
 - Does the SteelSeries Nimbus pair with BlueZ and show up in evdev? If not,
   any other Bluetooth pad works with the same code (section 8.8).
 - How long does a model switch (`detect` ↔ `pose`) take on the TPU?
+- Do the HatDrive! AI and the Robot HAT fit together mechanically, and how
+  much does the NVMe add to the power draw on battery (section 12)?
