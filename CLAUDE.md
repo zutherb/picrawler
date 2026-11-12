@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Motion-only fork of the SunFounder PiCrawler library: inverse/forward kinematics, gait generation and servo control for the 4-legged robot on Raspberry Pi. Voice/LLM, audio, camera and sensor code was intentionally removed from the `picrawler` package — do not re-add it there. Sensors, MQTT and anything with networking live in `services/` (one process each). Target design: `docs/target-architecture.md` (German). Version 3.0.0.
+Motion-only fork of the SunFounder PiCrawler library: inverse/forward kinematics, gait generation and servo control for the 4-legged robot on Raspberry Pi. Voice/LLM, audio, camera and sensor code was intentionally removed from the `picrawler` package — do not re-add it there. Sensors, MQTT and anything with networking live in `services/` (one process each). Target design: `docs/target-architecture.md`. Write all project files (docs, comments, messages) in English. Version 3.0.0.
 
 ## Build / install / test
 

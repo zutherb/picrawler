@@ -1,100 +1,100 @@
-# Zielarchitektur: Sensorgesteuerter Körper über MQTT
+# Target architecture: sensor-driven body over MQTT
 
-Status: Entwurf · Stand: 2026-11-11 · Branch: `motion-framework`
+Status: draft · As of: 2026-11-11 · Branch: `motion-framework`
 
-## 1. Ziel
+## 1. Goal
 
-Sensoren, die auf demselben Pi oder auf anderen Geräten laufen (z. B. ESP32),
-darunter eine Kamera mit Coral Edge TPU für Bilderkennung,
-sollen das Verhalten des PiCrawlers beeinflussen können, ohne mit der
-Servo-Ansteuerung gekoppelt zu sein. Neue Sensoren und externe Steuerungen
-(Node-RED, Home Assistant, LLM) sollen sich anschließen lassen, ohne dass der
-Motorik-Kern geändert werden muss.
+Sensors running on the same Pi or on other devices (e.g. ESP32),
+including a camera with a Coral Edge TPU for image recognition,
+should be able to influence the PiCrawler's behaviour without being coupled
+to the servo control. New sensors and external controllers
+(Node-RED, Home Assistant, LLM) should be connectable without having to
+change the motion core.
 
-### Grundsätze
+### Principles
 
-1. **Sensoren melden Fakten, keine Befehle.** Ein Sensor veröffentlicht
-   „Abstand = 12 cm“, nicht „stopp“.
-2. **Eine Stelle entscheidet.** Der Arbiter setzt Sensorfakten nach
-   Prioritäten in Befehle um.
-3. **Ein einziger Prozess spricht mit den Servos.** Nur der `MotionExecutor`
-   ruft `Picrawler` auf.
-4. **Der Kern bleibt frei von MQTT.** `picrawler/` hat keine Abhängigkeit zu
-   MQTT und bleibt ohne Hardware testbar.
-5. **Im Zweifel anhalten.** Fällt eine Verbindung aus, kommt eine ungültige
-   Nachricht oder läuft eine Zeit ab, geht der Körper in einen sicheren Zustand.
+1. **Sensors report facts, not commands.** A sensor publishes
+   "distance = 12 cm", not "stop".
+2. **One place decides.** The arbiter turns sensor facts into commands
+   according to priorities.
+3. **A single process talks to the servos.** Only the `MotionExecutor`
+   calls `Picrawler`.
+4. **The core stays free of MQTT.** `picrawler/` has no dependency on
+   MQTT and remains testable without hardware.
+5. **When in doubt, stop.** If a connection drops, an invalid message
+   arrives or a timeout expires, the body goes into a safe state.
 
-### Nicht-Ziele
+### Non-goals
 
-- Regelkreise über 20 Hz über MQTT (z. B. Balancieren mit IMU). Solche
-  Regelkreise laufen lokal im Executor.
-- Einzelne Gait-Frames als Echtzeit-Stream über das Netz.
-- Navigation, Kartierung, mehrere Roboter (dafür später ROS 2 prüfen).
+- Control loops above 20 Hz over MQTT (e.g. balancing with an IMU). Such
+  control loops run locally in the executor.
+- Individual gait frames as a real-time stream over the network.
+- Navigation, mapping, multiple robots (evaluate ROS 2 for that later).
 
-## 2. Komponenten
+## 2. Components
 
 ```
- Sensor-Knoten                Arbiter                     Body-Service (Pi)
+ Sensor nodes                 Arbiter                     Body-Service (Pi)
 ┌──────────────┐ sensor/*  ┌──────────────┐  cmd/*   ┌──────────────────────────┐
-│ ultrasonic   │ ────────► │ Regeln       │ ───────► │ services.body (Adapter)  │
-│ imu          │           │ Prioritäten  │          │   Validierung, Dedupe    │
+│ ultrasonic   │ ────────► │ Rules        │ ───────► │ services.body (Adapter)  │
+│ imu          │           │ Priorities   │          │   Validation, Dedupe     │
 │ vision+Coral │           │              │ ◄─────── │   Watchdog               │
 │ remote       │           └──────────────┘ state/*  │ picrawler.executor       │
-└──────────────┘                                     │   MotionExecutor-Thread  │
+└──────────────┘                                     │   MotionExecutor thread  │
                                                      │ picrawler.Picrawler      │
                                                      └──────────────────────────┘
 ```
 
-| Komponente | Ort | Verantwortung | Darf nicht |
+| Component | Location | Responsibility | Must not |
 |---|---|---|---|
-| `picrawler` (Kern) | dieses Repo | Kinematik, Gaits, Servos | MQTT importieren, Threads starten |
-| `picrawler.executor` | dieses Repo | Befehle nacheinander ausführen, unterbrechbar zwischen Frames | Netzwerkzugriff |
-| `services.body` | dieses Repo, eigener Prozess | MQTT ↔ Executor, Validierung, Watchdog, Status | Servos am Executor vorbei ansteuern |
-| `services.arbiter` | dieses Repo, eigener Prozess | Sensorfakten → Befehle nach Priorität, Heartbeat | `cmd/*` von Sensoren durchreichen |
-| Sensor-Knoten | beliebig | Messwerte veröffentlichen | unter `cmd/*` veröffentlichen |
-| `vision-service` | Pi mit Kamera + Coral | Kamera, Videostream (nur lokal), Inferenz auf der TPU, Erkennungen veröffentlichen | Verhalten entscheiden, Befehle senden |
-| `web-service` | Pi | Login, Stream-Proxy, Objekt-Log, Not-Aus, Admin (Bluetooth, Vision-Modus, Dienste) | Servos oder Kamera direkt ansteuern |
-| `gamepad-service` | Pi | Bluetooth-Controller lesen, Eingaben veröffentlichen | unter `cmd/*` veröffentlichen |
+| `picrawler` (core) | this repo | Kinematics, gaits, servos | import MQTT, start threads |
+| `picrawler.executor` | this repo | Execute commands one after another, interruptible between frames | network access |
+| `services.body` | this repo, own process | MQTT ↔ executor, validation, watchdog, status | drive servos bypassing the executor |
+| `services.arbiter` | this repo, own process | Sensor facts → commands by priority, heartbeat | pass through `cmd/*` from sensors |
+| Sensor nodes | anywhere | Publish measurements | publish under `cmd/*` |
+| `vision-service` | Pi with camera + Coral | Camera, video stream (local only), inference on the TPU, publish detections | decide behaviour, send commands |
+| `web-service` | Pi | Login, stream proxy, object log, emergency stop, admin (Bluetooth, vision mode, services) | drive servos or camera directly |
+| `gamepad-service` | Pi | Read Bluetooth controller, publish inputs | publish under `cmd/*` |
 
-Paketstruktur:
+Package structure:
 
 ```
 picrawler/
   kinematics.py
   gaits.py
   picrawler.py        # + iter_action()
-  executor.py         # neu
-services/             # ein Prozess pro Dienst: python -m services.<name> --config …
-  common/             # config.py, mqtt.py (paho-Wrapper), schema.py (Payload-Validierung)
+  executor.py         # new
+services/             # one process per service: python -m services.<name> --config …
+  common/             # config.py, mqtt.py (paho wrapper), schema.py (payload validation)
   body/               # adapter.py (BodyAdapter), __main__.py
-  arbiter/            # arbiter.py (Regeln, Wander), __main__.py
+  arbiter/            # arbiter.py (rules, wander), __main__.py
   sensor_ultrasonic/  # __main__.py
-services/vision/      # Kamera + Coral, siehe Abschnitt 7
+services/vision/      # camera + Coral, see section 7
   __main__.py
-  camera.py           # picamera2: Haupt-Stream + lores-Stream
-  stream.py           # MJPEG über HTTP
-  inference.py        # TPU-Modelle, nur das jeweils neueste Bild
-  imprint.py          # eigene Objekte lernen
-services/web/         # Weboberfläche, siehe Abschnitt 8
+  camera.py           # picamera2: main stream + lores stream
+  stream.py           # MJPEG over HTTP
+  inference.py        # TPU models, only the newest frame each time
+  imprint.py          # learn custom objects
+services/web/         # web interface, see section 8
   __main__.py
-  app.py              # aiohttp: Routen, Login, SSE, Stream-Proxy
-  sightings.py        # Erkennungen → Sichtungen (Objekt-Log)
+  app.py              # aiohttp: routes, login, SSE, stream proxy
+  sightings.py        # detections → sightings (object log)
   store.py            # SQLite
-  bluetooth.py        # BlueZ über D-Bus
-  system.py           # Dienste/System über polkit
-  static/             # HTML, CSS, JS, ohne CDN
-services/gamepad/     # Bluetooth-Controller über evdev
+  bluetooth.py        # BlueZ over D-Bus
+  system.py           # services/system via polkit
+  static/             # HTML, CSS, JS, without CDN
+services/gamepad/     # Bluetooth controller via evdev
 tests/
 ```
 
-## 3. Kern-Erweiterungen
+## 3. Core extensions
 
 ### 3.1 `Picrawler.iter_action(name, steps=1)`
 
-Generator, der die Frames einer Aktion einzeln liefert. Die Logik für die
-abwechselnden Beinpaare (`stand_position`) wird dabei genauso fortgeschrieben
-wie in `do_action`. `do_action` wird intern darauf umgestellt und behält sein
-Verhalten:
+Generator that yields the frames of an action one by one. The logic for the
+alternating leg pairs (`stand_position`) is carried forward exactly as
+in `do_action`. `do_action` is switched over to it internally and keeps its
+behaviour:
 
 ```python
 def do_action(self, motion_name, step=1, speed=50):
@@ -102,16 +102,16 @@ def do_action(self, motion_name, step=1, speed=50):
         self.do_step(frame, speed=speed)
 ```
 
-Unbekannte Namen lösen `KeyError` aus, statt etwas auszugeben. `do_action`
-fängt das ab und gibt aus Kompatibilitätsgründen weiterhin „No such action“ aus.
+Unknown names raise `KeyError` instead of printing something. `do_action`
+catches this and, for compatibility, still prints "No such action".
 
 ### 3.2 `MotionExecutor`
 
 ```python
 class Priority(IntEnum):
-    GOAL = 0      # Fernsteuerung, Missionen, LLM
-    REFLEX = 1    # Sensorreaktionen, z. B. Ausweichen
-    SAFETY = 2    # Stopp, Watchdog, Not-Aus
+    GOAL = 0      # remote control, missions, LLM
+    REFLEX = 1    # sensor reactions, e.g. evasion
+    SAFETY = 2    # stop, watchdog, emergency stop
 
 @dataclass(frozen=True)
 class Command:
@@ -126,33 +126,33 @@ class Command:
 class MotionExecutor:
     def __init__(self, crawler, on_state=None): ...
     def start(self) -> None: ...
-    def submit(self, cmd: Command) -> bool: ...   # False = abgelehnt
+    def submit(self, cmd: Command) -> bool: ...   # False = rejected
     def stop(self, priority=Priority.SAFETY) -> None: ...
     def shutdown(self, sit=True) -> None: ...
     @property
     def state(self) -> ExecutorState: ...
 ```
 
-Regeln:
+Rules:
 
-- Genau ein Worker-Thread besitzt `crawler`. Kein anderer Code ruft ihn auf.
-- Zwischen zwei Frames wird geprüft, ob abgebrochen werden soll. Die
-  Reaktionszeit ist damit höchstens die Dauer eines Frames (abhängig von
-  `speed`, am Gerät messen).
-- Ein Befehl mit **höherer** Priorität bricht den laufenden ab und leert alle
-  wartenden Befehle mit niedrigerer Priorität.
-- Ein Befehl mit **gleicher** Priorität wird hinten angestellt. Die Warteschlange
-  hat eine feste Obergrenze (Standard 8), danach wird abgelehnt (`submit` → False).
-- Ein Befehl mit **niedrigerer** Priorität wird abgelehnt, solange die Sperrzeit
-  nach einem höher priorisierten Befehl läuft (Standard 1 s). So kann
-  „vorwärts“ einen gerade ausgelösten Stopp nicht sofort aufheben.
-- Fehler im Worker beenden den Thread nicht. Sie werden als Zustand `error`
-  gemeldet, danach folgt ein Stopp.
+- Exactly one worker thread owns `crawler`. No other code calls it.
+- Between two frames it checks whether to abort. The
+  reaction time is therefore at most the duration of one frame (depends on
+  `speed`, measure on the device).
+- A command with **higher** priority aborts the running one and clears all
+  waiting commands with lower priority.
+- A command with **equal** priority is appended to the end. The queue
+  has a fixed upper limit (default 8), beyond that it is rejected (`submit` → False).
+- A command with **lower** priority is rejected while the lockout period
+  after a higher-priority command is running (default 1 s). This way
+  "forward" cannot immediately cancel a stop that was just triggered.
+- Errors in the worker do not end the thread. They are reported as state `error`,
+  followed by a stop.
 
-Zustände:
+States:
 
 ```
-idle ──submit──► running ──fertig──► idle
+idle ──submit──► running ──done──► idle
   ▲                 │
   │            preempt/stop
   │                 ▼
@@ -160,37 +160,37 @@ idle ──submit──► running ──fertig──► idle
             error ──► (stop) ──► idle
 ```
 
-`on_state(ExecutorState)` wird bei jedem Übergang aufgerufen und liefert
-`status`, `command_id`, `name`, `priority`, `queue_len` und `error`.
+`on_state(ExecutorState)` is called on every transition and provides
+`status`, `command_id`, `name`, `priority`, `queue_len` and `error`.
 
-## 4. MQTT-Schnittstelle
+## 4. MQTT interface
 
-Präfix: `crawler/<robot_id>/` (Standard `robot_id = 1`). Alle Payloads sind
-JSON in UTF-8 und enthalten `ts` (Unix-Zeit in Sekunden, float).
+Prefix: `crawler/<robot_id>/` (default `robot_id = 1`). All payloads are
+JSON in UTF-8 and contain `ts` (Unix time in seconds, float).
 
 ### 4.1 Topics
 
-| Topic | Richtung | QoS | Retain |
+| Topic | Direction | QoS | Retain |
 |---|---|---|---|
-| `sensor/<sensor>/<messwert>` | Sensor → Arbiter | 0 | nein |
-| `sensor/<sensor>/status` | Sensor → | 1 | ja (LWT `offline`) |
-| `cmd/action` | Arbiter → Body | 1 | **nie** |
-| `cmd/frame` | Arbiter → Body | 1 | **nie** |
-| `cmd/stop` | jeder Berechtigte → Body | 1 | **nie** |
-| `cmd/heartbeat` | Arbiter (oder UI) → Body | 0 | nein |
-| `state/motion` | Body → | 1 | ja |
-| `state/legs` | Body → | 0 | ja |
-| `status` | Body → | 1 | ja (LWT `offline`) |
-| `event/rejected` | Body → | 1 | nein |
-| `event/watchdog` | Body → | 1 | nein |
-| `arbiter/status` | Arbiter → | 1 | ja (LWT `offline`) |
+| `sensor/<sensor>/<measurement>` | Sensor → Arbiter | 0 | no |
+| `sensor/<sensor>/status` | Sensor → | 1 | yes (LWT `offline`) |
+| `cmd/action` | Arbiter → Body | 1 | **never** |
+| `cmd/frame` | Arbiter → Body | 1 | **never** |
+| `cmd/stop` | any authorized party → Body | 1 | **never** |
+| `cmd/heartbeat` | Arbiter (or UI) → Body | 0 | no |
+| `state/motion` | Body → | 1 | yes |
+| `state/legs` | Body → | 0 | yes |
+| `status` | Body → | 1 | yes (LWT `offline`) |
+| `event/rejected` | Body → | 1 | no |
+| `event/watchdog` | Body → | 1 | no |
+| `arbiter/status` | Arbiter → | 1 | yes (LWT `offline`) |
 
-GOAL-Befehle nimmt der Body nur an, wenn in der letzten Sekunde ein
-`cmd/heartbeat` kam. Sonst würde der Watchdog sie ohnehin sofort abbrechen.
-REFLEX-Befehle und `cmd/stop` brauchen keinen Heartbeat.
+The body only accepts GOAL commands if a `cmd/heartbeat` arrived in the last
+second. Otherwise the watchdog would abort them immediately anyway.
+REFLEX commands and `cmd/stop` do not need a heartbeat.
 
-Der Body-Service ignoriert retained Nachrichten auf `cmd/*` (`msg.retain == True`)
-und meldet sie über `event/rejected`.
+The body service ignores retained messages on `cmd/*` (`msg.retain == True`)
+and reports them via `event/rejected`.
 
 ### 4.2 Payloads
 
@@ -219,46 +219,45 @@ und meldet sie über `event/rejected`.
 {"cm": 12.4, "ts": …}
 ```
 
-### 4.3 Validierung (`schema.py`)
+### 4.3 Validation (`schema.py`)
 
-Nachrichten, die eine der folgenden Regeln verletzen, werden verworfen und über
-`event/rejected` mit Grund gemeldet. Ausgeführt wird dann nichts.
+Messages that violate one of the following rules are discarded and reported
+with a reason via `event/rejected`. Nothing is executed in that case.
 
-- `name` ∈ fest konfigurierte Liste (Standard: alle eingebauten Gaits).
+- `name` ∈ fixed configured list (default: all built-in gaits).
 - `steps` ∈ 1–10, `speed` ∈ 1–100.
-- `frame`: genau 4 × 3 Zahlen, jede Koordinate im Bereich x 0–120,
-  y −120–150, z −100–130 mm (konfigurierbar).
-- `priority` ∈ {`goal`, `reflex`}. `safety` gibt es nur intern bzw. über `cmd/stop`.
-- `ts` darf höchstens 2 s alt sein (Schutz gegen veraltete Nachrichten).
-  Voraussetzung: Die Uhren sind per NTP synchronisiert.
-- `id` darf in den letzten 60 s noch nicht vorgekommen sein (Schutz gegen
-  doppelte Zustellung bei QoS 1).
+- `frame`: exactly 4 × 3 numbers, each coordinate in the range x 0–120,
+  y −120–150, z −100–130 mm (configurable).
+- `priority` ∈ {`goal`, `reflex`}. `safety` exists only internally or via `cmd/stop`.
+- `ts` may be at most 2 s old (protection against stale messages).
+  Prerequisite: the clocks are synchronized via NTP.
+- `id` must not have occurred in the last 60 s (protection against
+  duplicate delivery with QoS 1).
 
-## 5. Sicherheit
+## 5. Safety
 
-| Fall | Reaktion |
+| Case | Reaction |
 |---|---|
-| Verbindung zum Broker verloren | `stop(SAFETY)`, nach 5 s ohne Verbindung hinsetzen |
-| `cmd/heartbeat` bleibt länger als 1 s aus, während eine GOAL-Bewegung läuft | `stop(SAFETY)` |
-| Retained Befehl empfangen | ignorieren und melden |
-| Ungültige Nachricht | ignorieren und melden, Bewegung läuft weiter. Ausnahme `cmd/stop`: wird immer ausgeführt, auch mit veraltetem `ts` oder kaputtem Inhalt |
-| Ausnahme im Executor | `error` melden, dann stoppen |
-| Prozessende (SIGINT/SIGTERM) | `shutdown(sit=True)`, `status` = `offline` |
-| Start | `status` = `online`, Zustand `idle`, **keine** automatische Bewegung |
+| Connection to the broker lost | `stop(SAFETY)`, sit down after 5 s without connection |
+| `cmd/heartbeat` missing for longer than 1 s while a GOAL movement is running | `stop(SAFETY)` |
+| Retained command received | ignore and report |
+| Invalid message | ignore and report, movement continues. Exception `cmd/stop`: always executed, even with a stale `ts` or broken content |
+| Exception in the executor | report `error`, then stop |
+| Process end (SIGINT/SIGTERM) | `shutdown(sit=True)`, `status` = `offline` |
+| Start | `status` = `online`, state `idle`, **no** automatic movement |
 
 Broker:
 
-- Benutzer und Passwort pflicht, TLS empfohlen, sobald andere Geräte als
-  localhost beteiligt sind.
-- ACLs: Sensor-Benutzer dürfen nur `crawler/+/sensor/<eigener Sensor>/#`
-  schreiben. Nur Arbiter und Bedienoberfläche dürfen `crawler/+/cmd/#`
-  schreiben. Nur der Body-Service darf `state/#`, `status` und `event/#`
-  schreiben.
+- Username and password mandatory, TLS recommended as soon as devices other than
+  localhost are involved.
+- ACLs: sensor users may only write `crawler/+/sensor/<own sensor>/#`.
+  Only the arbiter and the user interface may write `crawler/+/cmd/#`.
+  Only the body service may write `state/#`, `status` and `event/#`.
 
 ## 6. Arbiter
 
-Regeln werden deklarativ in der Konfiguration angelegt und nach Priorität
-ausgewertet. Erste Regel:
+Rules are defined declaratively in the configuration and evaluated by
+priority. First rule:
 
 ```toml
 [[rule]]
@@ -270,228 +269,228 @@ priority = "safety"
 cooldown_s = 1.0
 ```
 
-Messwerte werden entprellt, z. B. durch einen Median über die letzten 3 Werte,
-damit ein einzelner Ausreißer keinen Stopp auslöst. Ist ein Sensor `offline`,
-gelten seine Regeln als „unbekannt“, und GOAL-Befehle, die von ihm abhängen,
-werden abgelehnt.
+Measurements are debounced, e.g. by a median over the last 3 values,
+so that a single outlier does not trigger a stop. If a sensor is `offline`,
+its rules are considered "unknown", and GOAL commands that depend on it
+are rejected.
 
-## 7. Vision-Service (Kamera + Coral TPU)
+## 7. Vision service (camera + Coral TPU)
 
-### 7.1 Aufgaben
+### 7.1 Responsibilities
 
-- Besitzt **als einziger Prozess** die Kamera und die Coral TPU.
-- Nimmt mit `picamera2` zwei Streams gleichzeitig auf: einen **Haupt-Stream**
-  für das Video (z. B. 1280×720) und einen **lores-Stream** in der
-  Eingabegröße des Modells (z. B. 300×300 oder 320×320) für die TPU.
-- Liefert das Video als **MJPEG über HTTP**, nur auf `127.0.0.1`. Login,
-  eingezeichnete Boxen und alles für den Browser übernimmt der web-service
-  (Abschnitt 8).
-- Veröffentlicht Erkennungen als **Fakten** unter `sensor/vision/*`. Was der
-  Roboter daraufhin tut, entscheidet der Arbiter (Abschnitt 6).
+- Is the **only process** that owns the camera and the Coral TPU.
+- Uses `picamera2` to capture two streams simultaneously: a **main stream**
+  for the video (e.g. 1280×720) and a **lores stream** at the
+  model's input size (e.g. 300×300 or 320×320) for the TPU.
+- Delivers the video as **MJPEG over HTTP**, only on `127.0.0.1`. Login,
+  drawn boxes and everything for the browser are handled by the web-service
+  (section 8).
+- Publishes detections as **facts** under `sensor/vision/*`. What the
+  robot does in response is decided by the arbiter (section 6).
 
 ### 7.2 Pipeline
 
 ```
-picamera2 ─┬─ main  ─► MJPEG-Encoder ─► HTTP /stream.mjpg
-           └─ lores ─► [neuestes Bild] ─► TPU ─► Nachverarbeitung ─► MQTT
+picamera2 ─┬─ main  ─► MJPEG encoder ─► HTTP /stream.mjpg
+           └─ lores ─► [newest frame] ─► TPU ─► post-processing ─► MQTT
 ```
 
-- Stream und Inferenz laufen in **getrennten Threads**. Ist die Inferenz
-  langsam oder fällt sie aus, läuft der Stream trotzdem weiter.
-- Die Inferenz holt sich immer nur das **neueste** Bild. Es gibt keine
-  Warteschlange, in der sich alte Bilder stauen, daher keine wachsende
-  Verzögerung.
-- Erkennungen werden auf höchstens 10 Hz begrenzt veröffentlicht. Der Crawler
-  kann mit seinen Schrittzyklen ohnehin nicht schneller reagieren.
+- Stream and inference run in **separate threads**. If inference is
+  slow or fails, the stream keeps running.
+- Inference always fetches only the **newest** frame. There is no
+  queue in which old frames pile up, hence no growing
+  latency.
+- Detections are published at a rate limited to at most 10 Hz. The crawler
+  cannot react faster with its step cycles anyway.
 
-### 7.3 Modelle (für die Edge TPU kompiliert, INT8)
+### 7.3 Models (compiled for the Edge TPU, INT8)
 
-| Modus | Modell (Startpunkt) | Ergebnis |
+| Mode | Model (starting point) | Result |
 |---|---|---|
-| `detect` | SSD MobileNet v2 oder EfficientDet-Lite0 (COCO) | Boxen + Klassen (person, cat, sports ball, …) |
-| `pose` | MoveNet Lightning | 17 Körperpunkte einer Person |
-| `imprint` | MobileNet-Embedding + Weight Imprinting | eigene, selbst beigebrachte Objektklassen |
-| `off` | – | nur Stream, TPU unbenutzt |
+| `detect` | SSD MobileNet v2 or EfficientDet-Lite0 (COCO) | Boxes + classes (person, cat, sports ball, …) |
+| `pose` | MoveNet Lightning | 17 body keypoints of one person |
+| `imprint` | MobileNet embedding + weight imprinting | custom, self-taught object classes |
+| `off` | – | stream only, TPU unused |
 
-Es ist immer ein Modus aktiv. Ein Wechsel lädt das Modell neu (Dauer am Gerät
-messen). Der Start-Modus steht in `vision.toml`, gewechselt wird über
+One mode is always active. Switching reloads the model (measure duration on the
+device). The start mode is set in `vision.toml`; switching is done via
 `vision/mode`.
 
 ### 7.4 Topics
 
-| Topic | Richtung | QoS | Retain | Payload |
+| Topic | Direction | QoS | Retain | Payload |
 |---|---|---|---|---|
-| `sensor/vision/detections` | vision → | 0 | nein | `{"frame_ts": …, "objects": [{"label": "person", "score": 0.87, "box": [x0, y0, x1, y1]}]}` (Box normiert auf 0–1) |
-| `sensor/vision/pose` | vision → | 0 | nein | `{"frame_ts": …, "score": 0.7, "keypoints": [[x, y, score], …]}` (17 Punkte, COCO-Reihenfolge) |
-| `sensor/vision/status` | vision → | 1 | ja (LWT `offline`) | `{"status": "online", "tpu": true, "mode": "detect", "fps": 18.2, "inference_ms": 9.5}` |
-| `vision/mode` | Arbiter/UI → vision | 1 | nie | `{"id": "…", "mode": "pose", "ts": …}` |
+| `sensor/vision/detections` | vision → | 0 | no | `{"frame_ts": …, "objects": [{"label": "person", "score": 0.87, "box": [x0, y0, x1, y1]}]}` (box normalized to 0–1) |
+| `sensor/vision/pose` | vision → | 0 | no | `{"frame_ts": …, "score": 0.7, "keypoints": [[x, y, score], …]}` (17 points, COCO order) |
+| `sensor/vision/status` | vision → | 1 | yes (LWT `offline`) | `{"status": "online", "tpu": true, "mode": "detect", "fps": 18.2, "inference_ms": 9.5}` |
+| `vision/mode` | Arbiter/UI → vision | 1 | never | `{"id": "…", "mode": "pose", "ts": …}` |
 
-Imprinting (Objekt zeigen, Namen vergeben, lernen) wird über die
-Admin-Seite des web-service bedient (Abschnitt 8.4). Die gelernten Klassen liegen unter
+Imprinting (show an object, assign a name, learn) is operated via the
+admin page of the web-service (section 8.4). The learned classes are stored under
 `/var/lib/picrawler/vision/`.
 
-### 7.5 Verhalten im Arbiter
+### 7.5 Behaviour in the arbiter
 
-Neue Regeln, alle mit Priorität `goal`, außer wo anders angegeben:
+New rules, all with priority `goal` unless stated otherwise:
 
-- **Folge mir** (`detect`, Label `person`, höchster Score):
-  - Box-Mitte weiter als 0,15 von der Bildmitte entfernt → `turn left` bzw.
+- **Follow me** (`detect`, label `person`, highest score):
+  - Box centre more than 0.15 away from the image centre → `turn left` or
     `turn right`
-  - sonst, solange die Boxhöhe < 0,5 ist → `forward`
-  - sonst → stehen bleiben
-  - Person länger als 2 s nicht gesehen → `stop`
-  - Neuer Befehl erst, wenn `state/motion` wieder `idle` meldet. So wird
-    die Warteschlange nicht mit Befehlen geflutet.
-- **Gesten** (`pose`): Handgelenk über dem Kopf → `stand`, Winken (seitliche
-  Bewegung des Handgelenks über 1 s) → `wave`. Jede Geste muss 3 Bilder in
-  Folge erkannt werden, um Fehlauslösungen zu vermeiden.
-- **Suchen** (`imprint`): langsam drehen, bis das gelernte Objekt erkannt
-  wird, dann wie „Folge mir“ annähern.
-- Der Ultraschall-Stopp (`safety`) überstimmt immer alle Vision-Regeln.
-- `sensor/vision/status` ist `offline` oder `tpu: false` → alle
-  Vision-Regeln gelten als „unbekannt“ und lösen nichts aus.
+  - otherwise, as long as the box height is < 0.5 → `forward`
+  - otherwise → stay put
+  - Person not seen for more than 2 s → `stop`
+  - New command only once `state/motion` reports `idle` again. This way
+    the queue is not flooded with commands.
+- **Gestures** (`pose`): wrist above the head → `stand`, waving (sideways
+  movement of the wrist over 1 s) → `wave`. Each gesture must be detected in 3
+  consecutive frames to avoid false triggers.
+- **Search** (`imprint`): turn slowly until the learned object is detected,
+  then approach as in "Follow me".
+- The ultrasonic stop (`safety`) always overrides all vision rules.
+- `sensor/vision/status` is `offline` or `tpu: false` → all
+  vision rules are considered "unknown" and trigger nothing.
 
-### 7.6 Randbedingungen
+### 7.6 Constraints
 
-- **Software-Risiko:** Die offizielle `pycoral` unterstützt nur bis
-  Python 3.9, Raspberry Pi OS Bookworm hat 3.11. Welcher Weg genommen wird,
-  entscheidet Spike M-V0 (Abschnitt 11, `spikes/coral/`):
-  1. Community-Build (z. B. `pycoral-pi5`)
-  2. `tflite-runtime` bzw. LiteRT mit dem Edge-TPU-Delegate (`libedgetpu`),
-     ggf. mit separatem Python über `uv`
-  3. Inferenz in einem Container mit älterem Debian. Die Kamera bleibt dabei
-     außerhalb, und die Bilder werden lokal übergeben (zusätzlicher Service).
-- **Ohne TPU:** Der Service startet trotzdem, liefert den Stream und meldet
-  `tpu: false`. Keine Inferenz auf der CPU als stiller Ersatz, damit die CPU
-  für Motorik und Stream frei bleibt.
-- **Strom:** `libedgetpu` mit Standard-Takt statt Maximal-Takt. Verbrauch
-  und Spannungseinbrüche unter Last am Akku messen (Servos + TPU +
-  Kamera + Stream gleichzeitig).
-- **Datenschutz:** standardmäßig keine Aufzeichnung, Stream nur im LAN mit
-  Login, keine Identifikation von Personen.
+- **Software risk:** The official `pycoral` only supports up to
+  Python 3.9, Raspberry Pi OS Bookworm has 3.11. Which path is taken is
+  decided by spike M-V0 (section 11, `spikes/coral/`):
+  1. Community build (e.g. `pycoral-pi5`)
+  2. `tflite-runtime` or LiteRT with the Edge TPU delegate (`libedgetpu`),
+     possibly with a separate Python via `uv`
+  3. Inference in a container with an older Debian. The camera stays
+     outside, and the frames are handed over locally (additional service).
+- **Without TPU:** The service still starts, delivers the stream and reports
+  `tpu: false`. No inference on the CPU as a silent fallback, so that the CPU
+  stays free for motion and stream.
+- **Power:** `libedgetpu` with standard clock instead of maximum clock. Measure consumption
+  and voltage drops under load on the battery (servos + TPU +
+  camera + stream simultaneously).
+- **Privacy:** no recording by default, stream only on the LAN with
+  login, no identification of persons.
 
-## 8. Weboberfläche (web-service)
+## 8. Web interface (web-service)
 
-Eigener Dienst `services/web/`, getrennt vom vision-service. Grund: Der
-vision-service soll nur Kamera und TPU besitzen, und Admin-Funktionen wie
-Bluetooth brauchen andere Rechte als die Kamera. Stürzt die Oberfläche ab,
-laufen Stream-Erzeugung und Erkennung weiter, und umgekehrt.
+Separate service `services/web/`, decoupled from the vision-service. Reason: the
+vision-service should only own the camera and TPU, and admin functions such as
+Bluetooth need different permissions than the camera. If the interface crashes,
+stream generation and detection keep running, and vice versa.
 
-### 8.1 Aufbau
+### 8.1 Structure
 
 ```
 Browser ──HTTP──► web-service :8080 ─┬─ /stream.mjpg ──► vision-service 127.0.0.1:8081 (Proxy)
-   ▲                                 ├─ MQTT (Benutzer ui): sensor/#, state/#, status, event/#
-   └──── Server-Sent Events ─────────┤                    cmd/stop, cmd/action, vision/mode
-                                     └─ BlueZ (D-Bus)  ──► Bluetooth-Controller
+   ▲                                 ├─ MQTT (user ui): sensor/#, state/#, status, event/#
+   └──── Server-Sent Events ─────────┤                cmd/stop, cmd/action, vision/mode
+                                     └─ BlueZ (D-Bus)  ──► Bluetooth controller
 ```
 
-- Der vision-service lauscht nur noch auf `127.0.0.1`. Von außen ist der
-  Stream ausschließlich über den web-service (mit Login) erreichbar.
-- Live-Daten (Log, Status, Bluetooth-Suche) gehen per **Server-Sent Events**
-  an den Browser. Das ist einfacher als WebSockets und reicht, weil
-  Befehle vom Browser als normale POST-Anfragen kommen.
-- Technik: `aiohttp` (ein Paket für HTTP, SSE und den Stream-Proxy, auch als
-  `python3-aiohttp` per apt), BlueZ über `dbus-fast`, Frontend als
-  statisches HTML/CSS/JS **ohne Build-Schritt und ohne CDN**. Die Seite muss
-  ohne Internet funktionieren.
+- The vision-service now listens only on `127.0.0.1`. From outside, the
+  stream is reachable exclusively via the web-service (with login).
+- Live data (log, status, Bluetooth scan) goes to the browser via **Server-Sent Events**.
+  This is simpler than WebSockets and sufficient, because
+  commands from the browser arrive as normal POST requests.
+- Technology: `aiohttp` (one package for HTTP, SSE and the stream proxy, also available as
+  `python3-aiohttp` via apt), BlueZ via `dbus-fast`, frontend as
+  static HTML/CSS/JS **without a build step and without CDN**. The page must
+  work without internet.
 
-### 8.2 Seiten
+### 8.2 Pages
 
-| Seite | Rolle | Inhalt |
+| Page | Role | Content |
 |---|---|---|
-| **Live** | viewer | Video, eingezeichnete Boxen (umschaltbar), Status-Leiste (vision online/TPU/FPS/Inferenzzeit, Body-Status, Gamepad verbunden), **Not-Aus-Knopf** (immer sichtbar), Live-Log der letzten Ereignisse |
-| **Log** | viewer | Objekt-Log mit Filter (Label, Zeitraum, Mindest-Score), CSV-Export |
-| **Admin** | admin | Bluetooth-Controller, Vision-Modus, Dienste, System |
+| **Live** | viewer | Video, drawn boxes (toggleable), status bar (vision online/TPU/FPS/inference time, body status, gamepad connected), **emergency stop button** (always visible), live log of the latest events |
+| **Log** | viewer | Object log with filter (label, time range, minimum score), CSV export |
+| **Admin** | admin | Bluetooth controller, vision mode, services, system |
 
-Die Boxen zeichnet der Browser in ein Canvas über dem Video, mit den Daten
-aus `sensor/vision/detections`. So bleibt der Stream unverändert, und es
-wird kein zweiter, bearbeiteter Videostrom auf dem Pi kodiert.
+The browser draws the boxes onto a canvas over the video, using the data
+from `sensor/vision/detections`. This keeps the stream unchanged, and no
+second, edited video stream has to be encoded on the Pi.
 
-### 8.3 Objekt-Log
+### 8.3 Object log
 
-Erkennungen kommen mit bis zu 10 Hz. Pro Bild einen Eintrag zu schreiben,
-wäre unlesbar. Der web-service fasst sie deshalb zu **Sichtungen** zusammen:
+Detections arrive at up to 10 Hz. Writing one entry per frame
+would be unreadable. The web-service therefore aggregates them into **sightings**:
 
-- **Beginn:** Ein Label wird in 3 aufeinanderfolgenden Bildern mit
-  Score ≥ `min_score` (Standard 0,5) erkannt.
-- **Ende:** Das Label wurde 2 s lang nicht mehr erkannt.
-- Mehrere Objekte mit demselben Label zählen als eine Sichtung, die Anzahl
-  wird als `max_count` mitgeschrieben. Ein Tracking einzelner Objekte gibt
-  es nicht.
-- Einträge: `start`, `end`, `label`, `max_score`, `max_count`, `mode`
-  (`detect`/`imprint`). Gesten aus `pose` erscheinen als eigene Einträge
-  (`gesture: wave`), ebenso Ereignisse des Bodys (`event/rejected`, Stopps
-  durch den Ultraschall).
-- Speicherung in SQLite unter `/var/lib/picrawler/web/log.db`, Aufbewahrung
-  standardmäßig 7 Tage bzw. höchstens 10 000 Einträge.
-- **Kein Speichern von Bildern** (passend zu 7.6 Datenschutz). Optional
-  einschaltbar: ein kleines Vorschaubild pro Sichtung, standardmäßig aus.
+- **Start:** A label is detected in 3 consecutive frames with
+  score ≥ `min_score` (default 0.5).
+- **End:** The label has not been detected for 2 s.
+- Several objects with the same label count as one sighting; the count
+  is recorded as `max_count`. There is no tracking of individual
+  objects.
+- Entries: `start`, `end`, `label`, `max_score`, `max_count`, `mode`
+  (`detect`/`imprint`). Gestures from `pose` appear as separate entries
+  (`gesture: wave`), as do body events (`event/rejected`, stops
+  caused by the ultrasonic sensor).
+- Storage in SQLite under `/var/lib/picrawler/web/log.db`, retention
+  by default 7 days or at most 10 000 entries.
+- **No storing of images** (in line with 7.6 Privacy). Optionally
+  enableable: a small thumbnail per sighting, off by default.
 
-Das Zusammenfassen liegt im web-service und nicht im vision-service, weil
-der Arbiter die Rohdaten pro Bild braucht.
+The aggregation lives in the web-service and not in the vision-service, because
+the arbiter needs the raw per-frame data.
 
-### 8.4 Admin-Funktionen
+### 8.4 Admin functions
 
-**Bluetooth-Controller**
-- Suche starten/stoppen (läuft höchstens 30 s), gefundene Geräte
-  live anzeigen, Gamepads anhand der Geräteklasse oben einsortieren.
-- Koppeln → vertrauen (`Trusted`, damit sich der Controller später selbst
-  wieder verbindet) → verbinden. Für das Koppeln registriert der web-service
-  einen BlueZ-Agent mit `NoInputNoOutput`. Das reicht für übliche Gamepads
+**Bluetooth controller**
+- Start/stop scan (runs at most 30 s), show found devices
+  live, sort gamepads to the top based on the device class.
+- Pair → trust (`Trusted`, so that the controller later reconnects
+  by itself) → connect. For pairing, the web-service registers
+  a BlueZ agent with `NoInputNoOutput`. This is sufficient for common gamepads
   (Xbox, PlayStation, 8BitDo).
-- Liste gekoppelter Geräte mit Status (verbunden, Akku falls gemeldet),
-  Trennen, Entfernen.
-- Dazu gehört ein eigener **gamepad-service** (`services/gamepad/`), der den
-  verbundenen Controller über `evdev` liest und unter `sensor/gamepad/*`
-  veröffentlicht. Wie die Knöpfe auf Befehle abgebildet werden und wie
-  Handsteuerung gegenüber Autonomie priorisiert wird, wird in einem
-  eigenen Abschnitt festgelegt. Der Ultraschall-Stopp (`safety`) gilt auch
-  bei Handsteuerung.
+- List of paired devices with status (connected, battery if reported),
+  disconnect, remove.
+- This includes a separate **gamepad-service** (`services/gamepad/`) that reads the
+  connected controller via `evdev` and publishes under `sensor/gamepad/*`.
+  How the buttons are mapped to commands and how
+  manual control is prioritized relative to autonomy will be defined in a
+  separate section. The ultrasonic stop (`safety`) also applies
+  during manual control.
 
-**Vision**: Modus wechseln (`detect`/`pose`/`imprint`/`off`) über
-`vision/mode`; Imprinting (Objekt vor die Kamera halten, Namen vergeben,
-lernen, gelernte Klassen löschen).
+**Vision**: switch mode (`detect`/`pose`/`imprint`/`off`) via
+`vision/mode`; imprinting (hold an object in front of the camera, assign a name,
+learn, delete learned classes).
 
-**Dienste**: Status aller `picrawler-*`-Units, Neustart einzelner Dienste,
-letzte Log-Zeilen aus dem Journal.
+**Services**: status of all `picrawler-*` units, restart of individual services,
+latest log lines from the journal.
 
-**System**: CPU-Temperatur, Drosselung (`vcgencmd get_throttled`),
-Akkuspannung falls verfügbar, Herunterfahren und Neustart (mit
-Bestätigungsdialog). Herunterfahren setzt den Crawler vorher hin.
+**System**: CPU temperature, throttling (`vcgencmd get_throttled`),
+battery voltage if available, shutdown and reboot (with
+confirmation dialog). Shutdown makes the crawler sit down first.
 
-### 8.5 Sicherheit
+### 8.5 Security
 
-- **Login** mit Sitzungs-Cookie (`HttpOnly`, `SameSite=Strict`). Passwörter
-  als scrypt-Hash in `web.toml`, gesetzt über Ansible Vault.
-- **Zwei Rollen:** `viewer` (Video, Log, Not-Aus) und `admin` (zusätzlich
-  alles aus 8.4). Der Not-Aus ist für jede angemeldete Person verfügbar.
-- Alle ändernden Anfragen nur per POST mit CSRF-Token.
-- Nur LAN. HTTPS optional mit eigenem Zertifikat. Ohne HTTPS gehen
-  Passwort und Cookie im Klartext durchs WLAN. Das ist im eigenen Netz
-  vertretbar, muss aber in der Konfiguration bewusst bestätigt werden (wie
+- **Login** with session cookie (`HttpOnly`, `SameSite=Strict`). Passwords
+  as scrypt hash in `web.toml`, set via Ansible Vault.
+- **Two roles:** `viewer` (video, log, emergency stop) and `admin` (additionally
+  everything from 8.4). The emergency stop is available to every logged-in person.
+- All modifying requests only via POST with CSRF token.
+- LAN only. HTTPS optional with own certificate. Without HTTPS,
+  password and cookie travel in plain text over the Wi-Fi. This is
+  acceptable on your own network, but must be explicitly confirmed in the configuration (like
   `mosquitto_allow_plaintext_remote`).
-- **Möglichst wenige Rechte:** Der Dienst läuft als eigener Benutzer
-  `picrawler-web` und bekommt nur, was er braucht:
-  - Gruppe `bluetooth`, damit er BlueZ über D-Bus steuern darf.
-  - Eine **polkit-Regel**, die genau Neustart/Status der
-    `picrawler-*`-Units sowie Herunterfahren/Neustart des Systems erlaubt.
-    Kein `sudo`, keine Shell-Befehle mit Eingaben aus dem Browser.
-  - MQTT-Benutzer `ui` (ACL existiert bereits in Ansible).
-- Fehlgeschlagene Logins werden gebremst (z. B. 5 Versuche pro Minute
-  pro IP).
+- **Least privilege:** The service runs as its own user
+  `picrawler-web` and gets only what it needs:
+  - Group `bluetooth`, so that it may control BlueZ via D-Bus.
+  - A **polkit rule** that allows exactly restart/status of the
+    `picrawler-*` units as well as shutdown/reboot of the system.
+    No `sudo`, no shell commands with input from the browser.
+  - MQTT user `ui` (ACL already exists in Ansible).
+- Failed logins are rate-limited (e.g. 5 attempts per minute
+  per IP).
 
-### 8.6 Konfiguration (`web.toml`)
+### 8.6 Configuration (`web.toml`)
 
 ```toml
 [http]
 listen = "0.0.0.0:8080"
-allow_plaintext = true          # ohne HTTPS bewusst bestätigen
+allow_plaintext = true          # confirm explicitly when running without HTTPS
 vision_stream = "http://127.0.0.1:8081/stream.mjpg"
 
 [users.admin]
 role = "admin"
-password_hash = "scrypt$…"      # aus Ansible Vault
+password_hash = "scrypt$…"      # from Ansible Vault
 
 [log]
 min_score = 0.5
@@ -504,16 +503,16 @@ thumbnails = false
 
 ### 8.7 Tests
 
-- Zusammenfassen zu Sichtungen: Beginn nach 3 Bildern, Ende nach 2 s,
-  kurze Aussetzer verlängern die Sichtung, `max_count`/`max_score`.
-- Rechte: viewer erreicht keine Admin-Route, POST ohne CSRF-Token wird
-  abgelehnt, Not-Aus funktioniert für viewer.
-- Bluetooth mit einem Fake-BlueZ-Objekt: Suche, Koppeln, Fehler beim
-  Koppeln werden angezeigt statt verschluckt.
-- Entwicklung am Mac ohne Pi: `python -m services.web --fake` liefert ein
-  Testbild statt des Streams und erzeugt zufällige Erkennungen.
+- Aggregation into sightings: start after 3 frames, end after 2 s,
+  short dropouts extend the sighting, `max_count`/`max_score`.
+- Permissions: viewer cannot reach any admin route, POST without CSRF token is
+  rejected, emergency stop works for viewer.
+- Bluetooth with a fake BlueZ object: scan, pairing, pairing errors
+  are shown instead of swallowed.
+- Development on a Mac without a Pi: `python -m services.web --fake` delivers a
+  test image instead of the stream and generates random detections.
 
-## 9. Konfiguration (`body.toml`)
+## 9. Configuration (`body.toml`)
 
 ```toml
 robot_id = "1"
@@ -540,55 +539,54 @@ actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wa
 
 ## 10. Tests
 
-- **Executor** (ohne Hardware, mit `tests/fake_robot_hat.py`): Reihenfolge,
-  Abbruch durch höhere Priorität zwischen Frames, Obergrenze der
-  Warteschlange, Sperrzeit, Fehler im Worker, `shutdown` setzt hin.
-- **Schema**: alle Ablehnungsgründe aus 4.3.
-- **Adapter**: mit einem Fake-MQTT-Client: retained Befehle ignorieren,
-  Heartbeat-Timeout, Verbindungsabbruch, Dedupe.
-- **Integration** (optional, lokaler Mosquitto): Nachricht an
-  `sensor/ultrasonic/distance` mit `cm = 5` → Stopp innerhalb einer
-  Frame-Dauer.
-- **Am Gerät**: Reaktionszeit eines Stopps bei `speed` 40/70/100 messen und
-  hier eintragen.
+- **Executor** (without hardware, with `tests/fake_robot_hat.py`): order,
+  abort by higher priority between frames, upper limit of the
+  queue, lockout period, errors in the worker, `shutdown` sits down.
+- **Schema**: all rejection reasons from 4.3.
+- **Adapter**: with a fake MQTT client: ignore retained commands,
+  heartbeat timeout, connection loss, dedupe.
+- **Integration** (optional, local Mosquitto): message to
+  `sensor/ultrasonic/distance` with `cm = 5` → stop within one
+  frame duration.
+- **On the device**: measure the reaction time of a stop at `speed` 40/70/100 and
+  record it here.
 
-## 11. Meilensteine
+## 11. Milestones
 
-| # | Inhalt | Abnahme |
+| # | Content | Acceptance |
 |---|---|---|
-| M1 ✅ | `iter_action`, `MotionExecutor` | Bestehende Tests grün, Executor-Tests grün, `do_action` verhält sich unverändert |
-| M2 ✅ (Gerät offen) | `services.body`: Adapter + Schema + Watchdog | Adapter-Tests grün, Body-Service startet ohne Bewegung, Stopp per MQTT funktioniert am Gerät |
-| M3 ✅ (Gerät offen) | `services.arbiter` + `services.sensor_ultrasonic`, optional `[wander]` | Robot läuft vorwärts und stoppt vor einem Hindernis (< 15 cm) |
-| M4 | Weitere Sensoren / externe Steuerung | Neuer Sensor ohne Änderung an `picrawler/` angebunden |
-| M-V0 | Spike Coral-Software (unabhängig von M1–M3, kann sofort starten) | SSD MobileNet v2 läuft auf dem Ziel-Pi auf der TPU, gemessene Inferenzzeit und gewählter Installationsweg sind hier eingetragen |
-| M5 | vision-service: Stream + `detect` + Status | Stream im Browser mit Login, Erkennungen unter `sensor/vision/detections`, Stream läuft weiter, wenn die TPU abgezogen wird |
-| M6 | Folge mir | Crawler folgt einer Person, stoppt nach 2 s Verlust und bei Hindernis |
-| M7 | `pose`-Gesten + Imprinting | Arm heben → aufstehen, winken → winken, gelerntes Objekt wird gefunden |
-| M-W1 | web-service: Login, Live-Seite, Objekt-Log, Not-Aus (mit `--fake` unabhängig von M5 entwickelbar) | Sichtungs-Tests grün, Stream und Log im Browser, Not-Aus stoppt den Crawler, viewer kommt nicht auf Admin-Seiten |
-| M-W2 | Admin: Bluetooth, Vision-Modus, Dienste, System + gamepad-service | Controller lässt sich über die Seite koppeln und verbindet sich nach Neustart selbst, Crawler per Gamepad steuerbar, Ultraschall-Stopp greift auch dabei |
+| M1 ✅ | `iter_action`, `MotionExecutor` | Existing tests green, executor tests green, `do_action` behaves unchanged |
+| M2 ✅ (device test pending) | `services.body`: adapter + schema + watchdog | Adapter tests green, body service starts without movement, stop via MQTT works on the device |
+| M3 ✅ (device test pending) | `services.arbiter` + `services.sensor_ultrasonic`, optional `[wander]` | Robot walks forward and stops in front of an obstacle (< 15 cm) |
+| M4 | Further sensors / external control | New sensor connected without changes to `picrawler/` |
+| M-V0 | Spike Coral software (independent of M1–M3, can start immediately) | SSD MobileNet v2 runs on the TPU on the target Pi, measured inference time and chosen installation path are recorded here |
+| M5 | vision-service: stream + `detect` + status | Stream in the browser with login, detections under `sensor/vision/detections`, stream keeps running when the TPU is unplugged |
+| M6 | Follow me | Crawler follows a person, stops after 2 s of loss and at an obstacle |
+| M7 | `pose` gestures + imprinting | Raise arm → stand up, wave → wave, learned object is found |
+| M-W1 | web-service: login, live page, object log, emergency stop (can be developed independently of M5 with `--fake`) | Sighting tests green, stream and log in the browser, emergency stop stops the crawler, viewer cannot access admin pages |
+| M-W2 | Admin: Bluetooth, vision mode, services, system + gamepad-service | Controller can be paired via the page and reconnects by itself after reboot, crawler controllable via gamepad, ultrasonic stop also takes effect then |
 
-## 12. Hardware (entschieden)
+## 12. Hardware (decided)
 
-- **Raspberry Pi 5, 8 GB.** Kein H.264-Hardware-Encoder, daher MJPEG für
-  den Stream (Abschnitt 7).
-- **Coral Edge TPU als M.2-Karte über PCIe.** Erfordert 4K-Page-Kernel,
-  `dtparam=pciex1`, gasket-Treiber und eine udev-Regel (Gruppe `apex`). Der
-  Benutzer `picrawler` braucht die Gruppe `apex`. Einrichtung und Messwerte:
+- **Raspberry Pi 5, 8 GB.** No H.264 hardware encoder, hence MJPEG for
+  the stream (section 7).
+- **Coral Edge TPU as M.2 card over PCIe.** Requires a 4K-page kernel,
+  `dtparam=pciex1`, gasket driver and a udev rule (group `apex`). The
+  user `picrawler` needs the group `apex`. Setup and measurements:
   `spikes/coral/README.md`.
-- **Original-Kameramodul des PiCrawler** über das Pi-5-Adapterkabel
-  (22-polig auf 15-polig), angesprochen über libcamera/`picamera2`.
-- Offen: ob M.2-Board und Robot HAT mechanisch zusammen passen.
+- **Original PiCrawler camera module** via the Pi 5 adapter cable
+  (22-pin to 15-pin), accessed via libcamera/`picamera2`.
+- Open: whether the M.2 board and Robot HAT fit together mechanically.
 
-## 13. Offene Fragen
+## 13. Open questions
 
-- Welche Sensoren laufen auf welchem Gerät? Liegen alle am Pi, reicht anfangs
-  ein Event-Bus im Prozess, und MQTT kommt erst mit M2.
-- Wo läuft der Broker (Pi selbst oder ein anderer Rechner im Netz)?
-- Wie lange dauert ein Frame bei typischer `speed` tatsächlich? Davon hängt
-  ab, ob die Reaktionszeit eines Stopps reicht.
-- Soll zusätzlich zur eigenen Weboberfläche (Abschnitt 8) Home Assistant
-  o. ä. angebunden werden?
-- Welcher Controller genau? Davon hängen Tastenbelegung und Kopplung ab.
-- Handsteuerung per Gamepad: eigene Priorität `manual` zwischen `goal` und
-  `reflex`, oder schaltet sie die Autonomie komplett ab?
-- Wie lange dauert ein Modellwechsel (`detect` ↔ `pose`) auf der TPU?
+- Which sensors run on which device? If all are attached to the Pi, an
+  in-process event bus is enough at first, and MQTT only comes with M2.
+- Where does the broker run (on the Pi itself or another machine on the network)?
+- How long does a frame actually take at typical `speed`? This determines
+  whether the reaction time of a stop is sufficient.
+- Should Home Assistant or similar be connected in addition to the own web interface (section 8)?
+- Which controller exactly? Button mapping and pairing depend on it.
+- Manual control via gamepad: separate priority `manual` between `goal` and
+  `reflex`, or does it switch off autonomy completely?
+- How long does a model switch (`detect` ↔ `pose`) take on the TPU?

@@ -1,42 +1,41 @@
-# Pi provisionieren mit Ansible
+# Provisioning the Pi with Ansible
 
-Richtet einen Raspberry Pi (Raspberry Pi OS Bookworm) für den PiCrawler ein:
+Sets up a Raspberry Pi (Raspberry Pi OS Bookworm) for the PiCrawler:
 
-| Rolle | Was sie macht |
+| Role | What it does |
 |---|---|
-| `base` | apt-Pakete, I2C aktivieren (ggf. Reboot), Systembenutzer `picrawler` in `i2c`/`gpio` |
-| `mosquitto` | Broker nur mit Login, Passwörter gehasht, ACLs nach `docs/target-architecture.md` |
-| `picrawler` | Code nach `/opt/picrawler/src`, venv, `robot_hat`, Configs in `/etc/picrawler`, systemd-Units + `picrawler.target` |
+| `base` | apt packages, enables I2C (reboots if needed), system user `picrawler` in `i2c`/`gpio` |
+| `mosquitto` | broker with login only, hashed passwords, ACLs as in `docs/target-architecture.md` |
+| `picrawler` | code to `/opt/picrawler/src`, venv, `robot_hat`, configs in `/etc/picrawler`, systemd units + `picrawler.target` |
 
-## Einmalig
+## One-time setup
 
 ```bash
 cd deploy/ansible
 ansible-galaxy collection install -r requirements.yml
-cp inventory/hosts.example.yml inventory/hosts.yml        # Host/IP eintragen
+cp inventory/hosts.example.yml inventory/hosts.yml        # enter host/IP
 cp inventory/group_vars/picrawler/vault.example.yml inventory/group_vars/picrawler/vault.yml
-# lange Zufallspasswörter setzen, z. B.: openssl rand -base64 24
+# set long random passwords, e.g.: openssl rand -base64 24
 ansible-vault encrypt inventory/group_vars/picrawler/vault.yml
 ```
 
-`hosts.yml` und `vault.yml` sind per `.gitignore` ausgeschlossen.
+`hosts.yml` and `vault.yml` are excluded via `.gitignore`.
 
-## Ausführen
+## Running
 
 ```bash
-ansible-playbook site.yml --ask-vault-pass --check --diff   # Trockenlauf
+ansible-playbook site.yml --ask-vault-pass --check --diff   # dry run
 ansible-playbook site.yml --ask-vault-pass
 ```
 
-Standardmäßig wird der lokale Checkout per rsync übertragen. Alternativ
-`picrawler_source_mode: git` und `picrawler_git_repo` setzen.
+By default the local checkout is copied with rsync. Alternatively set
+`picrawler_source_mode: git` and `picrawler_git_repo`.
 
-## Services starten
+## Starting the services
 
-Die Unit-Dateien werden installiert, aber erst gestartet, wenn
-`picrawler_services_start: true` gesetzt ist. Den Service-Code
-(`services/body`, `services/arbiter`, `services/sensor_<name>`) gibt es noch
-nicht (Meilensteine M1–M3).
+The unit files are installed but only started once
+`picrawler_services_start: true` is set. Starting the body initializes the
+servos, so test the services by hand first (see `services/README.md`).
 
 ```bash
 systemctl status 'picrawler-*'
@@ -44,27 +43,27 @@ journalctl -u picrawler-body -f
 sudo systemctl stop picrawler.target
 ```
 
-## Wichtige Variablen
+## Important variables
 
-| Variable | Standard | Bedeutung |
+| Variable | Default | Meaning |
 |---|---|---|
-| `picrawler_services_start` | `false` | Units aktivieren und starten |
-| `picrawler_sensors` | `[ultrasonic]` | Sensor-Instanzen `picrawler-sensor@<name>` |
-| `mosquitto_users` | body, arbiter, sensor-ultrasonic | MQTT-Konten mit Rolle → ACL |
-| `mosquitto_listen_address` | `127.0.0.1` | Nicht-lokal nur mit `mosquitto_allow_plaintext_remote: true` (TLS fehlt noch) |
-| `picrawler_robot_hat_version` | `2.5.x` | Für reproduzierbare Installationen auf einen Commit-SHA pinnen |
-| `base_reboot_allowed` | `true` | Automatischer Reboot nach dem Aktivieren von I2C |
+| `picrawler_services_start` | `false` | enable and start the units |
+| `picrawler_sensors` | `[ultrasonic]` | sensor instances `picrawler-sensor@<name>` |
+| `picrawler_wander_enabled` | `false` | arbiter demo: walk forward, turn away from obstacles |
+| `mosquitto_users` | body, arbiter, sensor-ultrasonic | MQTT accounts with role → ACL |
+| `mosquitto_listen_address` | `127.0.0.1` | non-local only with `mosquitto_allow_plaintext_remote: true` (no TLS yet) |
+| `picrawler_robot_hat_version` | `2.5.x` | pin to a commit SHA for reproducible installs |
+| `base_reboot_allowed` | `true` | automatic reboot after enabling I2C |
 
-## Hinweise
+## Notes
 
-- `robot_hat` 2.5.x lässt sich nur importieren, wenn `smbus2`, `lgpio`,
-  `pyaudio` und `pygame` vorhanden sind, auch ohne Audio-Nutzung. Die
-  kompilierten Pakete kommen per apt und werden über `--system-site-packages`
-  in das venv durchgereicht.
-- Die Services laufen als `picrawler`, nicht als root. Ob `robot_hat`
-  (v. a. `reset_mcu()`) ohne root funktioniert, ist auf dem Gerät noch nicht
-  geprüft.
-- Kalibrierwerte liegen pro Benutzer in `~/.config/.picrawler.config`. Für die
-  Services also unter `/var/lib/picrawler/.config/`. Kalibrierung deshalb als
-  dieser Benutzer ausführen:
+- `robot_hat` 2.5.x can only be imported if `smbus2`, `lgpio`, `pyaudio`
+  and `pygame` are present, even without using audio. The compiled packages
+  come from apt and are passed into the venv via `--system-site-packages`.
+- The services run as `picrawler`, not as root. Whether `robot_hat`
+  (especially `reset_mcu()`) works without root has not been checked on the
+  device yet.
+- Calibration values are stored per user in `~/.config/.picrawler.config`,
+  so for the services under `/var/lib/picrawler/.config/`. Run the
+  calibration as that user:
   `sudo -u picrawler /opt/picrawler/venv/bin/python /opt/picrawler/src/examples/0_calibration.py`
