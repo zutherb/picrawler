@@ -10,10 +10,15 @@ struct Robot: Identifiable, Hashable {
     let tls: Bool
 
     var baseURL: URL {
-        // IPv6 literals need brackets in URLs
-        let h = host.contains(":") ? "[\(host)]" : host
-        return URL(string: "\(tls ? "https" : "http")://\(h):\(port)")!
+        var components = URLComponents()
+        components.scheme = tls ? "https" : "http"
+        components.host = host          // URLComponents adds brackets for IPv6
+        components.port = Int(port)
+        return components.url ?? URL(string: "\(tls ? "https" : "http")://localhost")!
     }
+
+    /// Address as shown to people: no interface suffix, no number grouping.
+    var displayAddress: String { "\(host):\(String(port))" }
 
     /// The robot's own hotspot: the Pi is always at 10.42.0.1.
     static func hotspot(id: String = "1") -> Robot {
@@ -25,6 +30,8 @@ struct Robot: Identifiable, Hashable {
 @MainActor
 final class Discovery: ObservableObject {
     @Published private(set) var robots: [Robot] = []
+    /// Services seen but not (yet) reachable: name -> "resolving…" or the error.
+    @Published private(set) var pending: [String: String] = [:]
     @Published private(set) var browsing = false
     @Published private(set) var error: String?
 
@@ -63,6 +70,7 @@ final class Discovery: ObservableObject {
     private func update(_ results: Set<NWBrowser.Result>) {
         let names = Set(results.compactMap { serviceName($0.endpoint) })
         robots.removeAll { robot in !names.contains(where: { robot.id.hasSuffix("|\($0)") }) }
+        pending = pending.filter { names.contains($0.key) }
         for result in results {
             guard let name = serviceName(result.endpoint) else { continue }
             var txt: [String: String] = [:]
@@ -80,18 +88,30 @@ final class Discovery: ObservableObject {
 
     /// Connect once to learn the address behind the service, then close.
     private func resolve(_ endpoint: NWEndpoint, name: String, txt: [String: String]) {
-        guard resolvers[name] == nil else { return }
+        guard resolvers[name] == nil, !robots.contains(where: { $0.id.hasSuffix("|\(name)") }) else { return }
         let connection = NWConnection(to: endpoint, using: .tcp)
         resolvers[name] = connection
+        pending[name] = "resolving…"
         connection.stateUpdateHandler = { [weak self] state in
-            guard case .ready = state else {
-                if case .failed = state { Task { @MainActor in self?.resolvers[name] = nil } }
+            switch state {
+            case .ready:
+                break
+            case .waiting(let error), .failed(let error):
+                // e.g. found via Bonjour but the web service does not answer
+                connection.cancel()
+                Task { @MainActor in
+                    self?.resolvers[name] = nil
+                    self?.pending[name] = "not reachable: \(error.localizedDescription)"
+                }
+                return
+            default:
                 return
             }
             if case .hostPort(let host, let port) = connection.currentPath?.remoteEndpoint {
+                // iOS appends the interface ("192.168.1.5%en0"); a URL cannot use it
                 let address: String
                 switch host {
-                case .ipv4(let a): address = "\(a)"
+                case .ipv4(let a): address = "\(a)".components(separatedBy: "%").first ?? "\(a)"
                 case .ipv6(let a): address = "\(a)".components(separatedBy: "%").first ?? "\(a)"
                 case .name(let n, _): address = n
                 @unknown default: address = "\(host)"
@@ -100,6 +120,7 @@ final class Discovery: ObservableObject {
                                   port: port.rawValue, tls: txt["tls"] != "0")
                 Task { @MainActor in
                     guard let self else { return }
+                    self.pending[name] = nil
                     self.robots.removeAll { $0.id == robot.id }
                     self.robots.append(robot)
                     self.robots.sort { $0.name < $1.name }
@@ -109,5 +130,18 @@ final class Discovery: ObservableObject {
             Task { @MainActor in self?.resolvers[name] = nil }
         }
         connection.start(queue: .main)
+        // NWConnection keeps retrying a refused port; give up after 5 s
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard let self, self.resolvers[name] === connection else { return }
+            connection.cancel()
+            self.resolvers[name] = nil
+            self.pending[name] = "not reachable (no answer on port \(self.portHint(endpoint)))"
+        }
+    }
+
+    private func portHint(_ endpoint: NWEndpoint) -> String {
+        if case .hostPort(_, let port) = endpoint { return "\(port)" }
+        return "8080"
     }
 }

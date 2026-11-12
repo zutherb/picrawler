@@ -95,6 +95,13 @@ final class AppModel: ObservableObject {
     }
 
     func credentials(for robot: Robot) -> (String, String)? {
+        #if DEBUG
+        // simulator screenshots: PICRAWLER_AUTOLOGIN="user:password" (debug builds only)
+        if let auto = ProcessInfo.processInfo.environment["PICRAWLER_AUTOLOGIN"],
+           let colon = auto.firstIndex(of: ":") {
+            return (String(auto[..<colon]), String(auto[auto.index(after: colon)...]))
+        }
+        #endif
         guard let user = UserDefaults.standard.string(forKey: "user.\(robot.id)"),
               let password = Keychain.get("login.\(robot.id)") else { return nil }
         return (user, password)

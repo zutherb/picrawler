@@ -88,7 +88,19 @@ struct RobotList: View {
                 Spacer()
                 if discovery.browsing { ProgressView().scaleEffect(0.8) }
             }
-            if discovery.robots.isEmpty {
+            ForEach(discovery.pending.keys.sorted(), id: \.self) { name in
+                HStack {
+                    RobotMark().frame(width: 36, height: 36).opacity(0.5)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.muted)
+                        Text(discovery.pending[name] ?? "").font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(Theme.warn)
+                    }
+                    Spacer()
+                }
+                .padding(10)
+            }
+            if discovery.robots.isEmpty && discovery.pending.isEmpty {
                 Text(discovery.error ?? "Looking for robots…")
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundStyle(Theme.muted)
@@ -99,7 +111,7 @@ struct RobotList: View {
                         RobotMark().frame(width: 36, height: 36)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(robot.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.text)
-                            Text("\(robot.host):\(robot.port)").font(.system(size: 12, design: .monospaced))
+                            Text(robot.displayAddress).font(.system(size: 12, design: .monospaced))
                                 .foregroundStyle(Theme.muted)
                         }
                         Spacer()
