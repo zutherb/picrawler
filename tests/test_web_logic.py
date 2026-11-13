@@ -2,7 +2,7 @@
 import asyncio
 import unittest
 
-from services.web import auth, bluetooth, system
+from services.web import auth, bluetooth, demo, hardware, system
 from services.web.sightings import SightingTracker
 from services.web.state import LiveState
 from services.web.store import LogStore
@@ -203,6 +203,134 @@ class SystemTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HardwareTest(unittest.TestCase):
+
+    LOCAL = {"i2c_bus": True, "tpu_pci": 1, "tpu_devices": ["apex_0"], "cameras": ["ov5647"],
+             "bluetooth": ["hci0"], "audio": {"playback": ["Headphones"], "capture": ["USB Mic"]}}
+
+    def facts(self, **extra):
+        now = 1000.0
+        base = {
+            "status": {"status": "online"},
+            "state/battery": {"present": True, "voltage": 7.6, "percent": 60, "level": "ok", "ts": now - 5},
+            "sensor/ultrasonic/status": {"status": "online"},
+            "sensor/ultrasonic/distance": {"cm": 42.0, "ts": now - 1},
+            "sensor/vision/status": {"status": "online", "tpu": True, "fps": 15.0},
+            "sensor/gamepad/status": {"status": "online", "connected": True, "name": "Nimbus+"},
+            "sensor/speech/status": {"status": "online"},
+            "voice/status": {"status": "online"},
+            "display/status": {"status": "online"},
+            "display/frame": {"ts": now - 2},
+        }
+        base.update(extra)
+        return {k: (v, now) for k, v in base.items() if v is not None}
+
+    def status(self, local, facts):
+        return {c["name"]: c["status"] for c in hardware.assess(local, facts, 1000.0)}
+
+    def test_everything_fine(self):
+        result = self.status(self.LOCAL, self.facts())
+        self.assertEqual(set(result.values()), {"ok"}, result)
+        self.assertEqual(len(result), 10)
+
+    def test_problems(self):
+        local = dict(self.LOCAL, cameras=[], tpu_devices=[], audio={"playback": [], "capture": ["USB Mic"]})
+        facts = self.facts(**{"state/battery": {"present": True, "voltage": 6.9, "level": "low", "ts": 999.0},
+                              "sensor/ultrasonic/distance": {"cm": None, "ts": 999.0},
+                              "sensor/gamepad/status": {"status": "online", "connected": False},
+                              "display/frame": {"ts": 100.0}})
+        result = self.status(local, facts)
+        self.assertEqual(result["Camera"], "bad")
+        self.assertEqual(result["Coral Edge TPU"], "bad")                # on PCIe, no driver node
+        self.assertEqual(result["Speaker"], "bad")
+        self.assertEqual(result["Battery"], "warn")
+        self.assertEqual(result["Ultrasonic"], "warn")                   # no echo
+        self.assertEqual(result["Gamepad"], "warn")
+        self.assertEqual(result["OLED display"], "warn")                 # stale picture
+        self.assertEqual(result["Microphone"], "ok")
+
+    def test_services_offline(self):
+        facts = self.facts(status={"status": "offline"}, **{"sensor/vision/status": {"status": "offline"}})
+        result = self.status(self.LOCAL, facts)
+        self.assertEqual(result["Robot HAT & servos"], "bad")
+        self.assertEqual(result["Camera"], "warn")
+        self.assertEqual(result["Coral Edge TPU"], "warn")
+        nothing = self.status({}, {})
+        self.assertEqual(nothing["Battery"], "unknown")
+        self.assertEqual(nothing["Gamepad"], "unknown")
+
+    def test_parsers(self):
+        self.assertEqual(hardware.parse_cameras("Available cameras\n-----------------\n"
+                                                "0 : ov5647 [2592x1944 10-bit GBRG] (/base/axi/pcie@120000/rp1/i2c@88000/ov5647@36)\n"
+                                                "    Modes: 'SGBRG10_CSI2P' : 640x480 [58.92 fps - (16, 0)/2560x1920 crop]\n"),
+                         ["ov5647"])
+        self.assertEqual(hardware.parse_cameras("No cameras available!\n"), [])
+        pcm = ("00-00: bcm2835 Headphones : bcm2835 Headphones : playback 8\n"
+               "01-00: USB Audio : USB Audio : playback 1 : capture 1\n")
+        self.assertEqual(hardware.parse_pcm(pcm), {"playback": ["bcm2835 Headphones", "USB Audio"],
+                                                    "capture": ["USB Audio"]})
+
+    def test_probe_local_reads_sysfs_and_dev(self):
+        import os
+        import tempfile
+        root = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, root)
+
+        def touch(path, text=""):
+            full = os.path.join(root, path)
+            os.makedirs(os.path.dirname(full), exist_ok=True)
+            with open(full, "w") as f:
+                f.write(text)
+
+        touch("dev/i2c-1")
+        touch("dev/apex_0")
+        touch("sys/bus/pci/devices/0000:03:00.0/vendor", "0x1ac1\n")
+        touch("sys/bus/pci/devices/0000:01:00.0/vendor", "0x144d\n")
+        os.makedirs(os.path.join(root, "sys/class/bluetooth/hci0"))
+        touch("proc/asound/pcm", "00-00: USB Audio : USB Audio : capture 1\n")
+
+        async def run(*args, timeout=10):
+            raise FileNotFoundError(args[0])
+
+        local = asyncio.run(hardware.probe_local(run, root=root))
+        self.assertEqual(local, {"i2c_bus": True, "tpu_pci": 1, "tpu_devices": ["apex_0"], "cameras": None,
+                                 "bluetooth": ["hci0"], "audio": {"playback": [], "capture": ["USB Audio"]}})
+
+
+class DemoPlayerTest(unittest.TestCase):
+
+    def test_replays_frames_and_messages_in_a_loop(self):
+        import json
+        import os
+        import tempfile
+        import zipfile
+        path = os.path.join(tempfile.mkdtemp(), "demo.zip")
+        self.addCleanup(os.remove, path)
+        events = [{"t": i / 10, "frame": i, "detections": [{"label": "chair", "score": 0.9, "box": [0, 0, 1, 1]}],
+                   "ultrasonic_cm": 40.0 + i, "motion": {"status": "running"},
+                   "map": {"status": "live", "message": "m", "grid": ["?"]}} for i in range(2)]
+        with zipfile.ZipFile(path, "w") as z:
+            z.writestr("meta.json", json.dumps({"fps": 100, "frames": 2}))
+            z.writestr("events.jsonl", "\n".join(json.dumps(e) for e in events))
+            for i in range(2):
+                z.writestr("frames/%05d.jpg" % i, b"jpeg%d" % i)
+        player = demo.DemoPlayer(path)
+        sent = []
+
+        async def play():
+            task = asyncio.ensure_future(player.run(lambda suffix, payload, retain=False: sent.append((suffix, payload))))
+            await asyncio.sleep(0.045)
+            task.cancel()
+
+        asyncio.run(play())
+        suffixes = [s for s, _ in sent]
+        self.assertGreaterEqual(suffixes.count("map/local"), 3)                 # looped past the 2 frames
+        self.assertIn("sensor/vision/detections", suffixes)
+        maps = [p for s, p in sent if s == "map/local"]
+        self.assertTrue(maps[2]["message"].startswith("Replay (loop 2)"))
+        self.assertIn(player.frame(), (b"jpeg0", b"jpeg1"))
 
 
 class MetricsTest(unittest.TestCase):

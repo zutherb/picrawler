@@ -65,6 +65,13 @@
       <h2>System</h2>
       <p class="muted">Live from /proc, every 2 s. For history over days see docs (node_exporter).</p>
       <div class="tiles" id="system"></div>
+      <div class="row hw-head">
+        <h3>Hardware</h3>
+        <span class="muted" id="hw-summary"></span>
+        <button id="hw-check">Check again</button>
+      </div>
+      <p class="muted">Device nodes and the camera list on the Pi, plus live data from the services (battery via the Robot HAT, distance readings, OLED frames). No I2C or GPIO access from the web.</p>
+      <div class="tiles hw" id="hardware"></div>
       <div class="row">
         <button class="danger" id="reboot">Reboot</button>
         <button class="danger" id="poweroff">Shut down</button>

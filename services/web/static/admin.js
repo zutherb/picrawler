@@ -176,6 +176,29 @@ function renderInfo(info) {
   if (info.uptime_s != null) sys.append(tile("Uptime", `${Math.floor(info.uptime_s / 3600)} h ${Math.floor(info.uptime_s / 60) % 60} min`, "ok"));
 }
 
+const HW_ORDER = { bad: 0, warn: 1, unknown: 2, ok: 3 };
+
+async function loadHardware(fresh = false) {
+  let data;
+  try {
+    data = await PC.api("GET", "/api/system/hardware" + (fresh ? "?fresh=1" : ""));
+  } catch (err) {
+    return;
+  }
+  const box = document.getElementById("hardware");
+  box.textContent = "";
+  for (const c of data.components) {
+    box.append(PC.el("div", { class: "tile" }, PC.el("div", { class: "label" }, c.name),
+      PC.el("div", { class: "value" }, PC.el("span", { class: "dot " + (c.status === "unknown" ? "" : c.status) }),
+        c.status === "ok" ? "ok" : c.status === "unknown" ? "unknown" : c.status === "warn" ? "check" : "problem"),
+      PC.el("div", { class: "detail" }, c.detail)));
+  }
+  const worst = data.components.reduce((w, c) => HW_ORDER[c.status] < HW_ORDER[w] ? c.status : w, "ok");
+  const bad = data.components.filter((c) => c.status === "bad" || c.status === "warn").length;
+  document.getElementById("hw-summary").textContent = bad ? `${bad} need attention` : `all ${data.components.length} ok`;
+  document.getElementById("hw-summary").className = "muted hw-" + worst;
+}
+
 async function showJournal(unit) {
   document.getElementById("journal-card").classList.remove("hidden");
   document.getElementById("journal-title").textContent = `journalctl -u ${unit} -n 100`;
@@ -211,12 +234,18 @@ async function power(action) {
 }
 
 document.getElementById("refresh").addEventListener("click", () => loadSystem(true));
+document.getElementById("hw-check").addEventListener("click", () => loadHardware(true));
 document.getElementById("reboot").addEventListener("click", () => power("reboot"));
 document.getElementById("poweroff").addEventListener("click", () => power("poweroff"));
 
 PC.init("admin").then(() => {
   loadDevices();
   loadSystem(true);
+  loadHardware();
   let ticks = 0;
-  setInterval(() => { ticks += 1; loadSystem(ticks % 5 === 0); }, 2000);
+  setInterval(() => {
+    ticks += 1;
+    loadSystem(ticks % 5 === 0);
+    if (ticks % 5 === 0) loadHardware();
+  }, 2000);
 });

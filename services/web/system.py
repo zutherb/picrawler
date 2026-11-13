@@ -12,6 +12,10 @@ import time
 from services.common.metrics import CpuSampler, read_metrics
 from services.display.sysinfo import network_status
 
+from .hardware import probe_local
+
+HARDWARE_CACHE_S = 15             # the camera list takes a second or two
+
 UNIT = re.compile(r"^picrawler-[a-z0-9_-]+(@[a-z0-9_-]+)?\.service$")
 
 
@@ -65,6 +69,7 @@ class System:
         self.units = list(units)
         self.thermal_path = thermal_path
         self.cpu = CpuSampler()
+        self._hardware = (0.0, None)
 
     def _check(self, unit):
         if unit not in self.units:
@@ -113,6 +118,14 @@ class System:
             info["uptime_s"] = None
         return info
 
+    async def hardware(self, fresh=False):
+        """Local probes (services/web/hardware.py), cached for HARDWARE_CACHE_S."""
+        at, local = self._hardware
+        if fresh or local is None or time.monotonic() - at > HARDWARE_CACHE_S:
+            local = await probe_local(_run)
+            self._hardware = (time.monotonic(), local)
+        return local
+
     async def power(self, action):
         if action not in ("poweroff", "reboot"):
             raise SystemActionError("unknown power action")
@@ -152,6 +165,11 @@ class FakeSystem:
                 "network": {"mode": "client", "connection": "Home", "clients": 0, "ip": None},
                 "throttled": {"raw": "0x0", "under_voltage": False, "throttled": False,
                               "under_voltage_since_boot": False, "throttled_since_boot": False}}
+
+    async def hardware(self, fresh=False):
+        # one TPU on PCIe, as with the HatDrive's single lane
+        return {"i2c_bus": True, "tpu_pci": 1, "tpu_devices": ["apex_0"], "cameras": ["ov5647"],
+                "bluetooth": ["hci0"], "audio": {"playback": ["bcm2835 Headphones"], "capture": ["USB PnP Sound Device"]}}
 
     async def power(self, action):
         if action not in ("poweroff", "reboot"):

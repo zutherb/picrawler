@@ -1,10 +1,11 @@
 """Web service: login, live video, object log, emergency stop, admin.
 
-    python -m services.web --config /etc/picrawler/web.toml [--fake]
+    python -m services.web --config /etc/picrawler/web.toml [--fake [--demo recording.zip]]
 
 --fake without an [mqtt] section runs without broker, Bluetooth and
 systemd: random detections, a fake gamepad and a test card stream, so the
-UI can be developed on a laptop.
+UI can be developed on a laptop. --demo replays a recording from
+rl_coral/demo_kitchen.py instead (camera, detections, rolling map).
 """
 import asyncio
 import ipaddress
@@ -160,9 +161,12 @@ class FakeFeed:
             return
         self.inject("display/frame", dict(frame_payload(image), ts=time.time()), retain=True)
 
-    async def run(self):
+    async def run(self, demo=None):
+        if demo is not None:
+            asyncio.ensure_future(demo.run(self.inject))
         self.inject("status", {"status": "online"}, retain=True)
         self.inject("arbiter/status", {"status": "online"}, retain=True)
+        self.inject("display/status", {"status": "online"}, retain=True)
         self.inject("state/motion", {"status": "idle", "queue_len": 0})
         self.inject("sensor/ultrasonic/status", {"status": "online"})
         self.inject("sensor/gamepad/status", {"status": "online", "connected": True, "name": "Fake gamepad"})
@@ -172,7 +176,7 @@ class FakeFeed:
         while True:
             await asyncio.sleep(0.1)
             t += 1
-            if self.mode == "detect":
+            if self.mode == "detect" and demo is None:
                 objects, _ = self.detector.detect(None)
                 self.inject("sensor/vision/detections", {"frame_ts": time.time(), "objects": objects})
             if t % 50 == 0:
@@ -182,11 +186,12 @@ class FakeFeed:
             if t % 10 == 0:
                 self.display_frame(t)
             if t % 5 == 0:
-                self.inject("sensor/ultrasonic/distance", {"cm": round(40 + 25 * random.random(), 1)})
+                if demo is None:
+                    self.inject("sensor/ultrasonic/distance", {"cm": round(40 + 25 * random.random(), 1)})
                 self.inject("sensor/gamepad/state", {"x": 0.0, "y": 0.0, "buttons": []})
 
 
-async def serve(cfg, fake):
+async def serve(cfg, fake, demo_path=None):
     http_cfg = cfg.get("http", {})
     host, port = check_listen(http_cfg)
     users = Users(cfg.get("users", {}))
@@ -205,6 +210,13 @@ async def serve(cfg, fake):
 
     bus = make_bus(cfg, "picrawler-web", "web/status", fake=fake)
     feed = FakeFeed(bus, state, monitor) if fake and "mqtt" not in cfg else None
+    demo = None
+    if demo_path:
+        if feed is None:
+            raise SystemExit("web: --demo needs --fake and no [mqtt] section")
+        from .demo import DemoPlayer
+        demo = DemoPlayer(demo_path)
+        print("web: replaying %s (%d frames)" % (demo_path, len(demo.events)))
     loop = asyncio.get_running_loop()
     for topic in SUBSCRIPTIONS:
         bus.subscribe(topic, qos=0)
@@ -217,6 +229,8 @@ async def serve(cfg, fake):
                     FakeBluetooth() if fake else Bluetoothctl(),
                     FakeSystem(units) if fake else System(units), store, fake=fake,
                     monitor=monitor, debug_hub=debug_hub)
+    if demo is not None:
+        webapp.demo = demo
     runner = web.AppRunner(webapp.build(), access_log=None)
     await runner.setup()
     ssl_ctx = None
@@ -226,7 +240,7 @@ async def serve(cfg, fake):
     await web.TCPSite(runner, host, port, ssl_context=ssl_ctx).start()
 
     bus.start()
-    tasks = [asyncio.ensure_future(feed.run())] if feed else []
+    tasks = [asyncio.ensure_future(feed.run(demo))] if feed else []
     stopping = asyncio.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stopping.set)
@@ -249,8 +263,10 @@ async def serve(cfg, fake):
 
 
 def main():
-    args = config.arg_parser("PiCrawler web service").parse_args()
-    asyncio.run(serve(config.load(args.config), args.fake))
+    parser = config.arg_parser("PiCrawler web service")
+    parser.add_argument("--demo", help="with --fake: replay a recording from rl_coral/demo_kitchen.py")
+    args = parser.parse_args()
+    asyncio.run(serve(config.load(args.config), args.fake, args.demo))
 
 
 if __name__ == "__main__":

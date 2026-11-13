@@ -2,7 +2,6 @@
 
 const video = document.getElementById("video");
 const canvas = document.getElementById("overlay");
-const ctx = canvas.getContext("2d");
 const showBoxes = document.getElementById("boxes");
 const feed = document.getElementById("feed");
 const FEED_MAX = 6;          // compact list; the dialog shows everything
@@ -23,34 +22,9 @@ video.addEventListener("error", () => {
 
 // --- boxes ---
 
-const COLORS = ["#30D5C0", "#A0F3E3", "#FEBC2E", "#FF5F57", "#B8ADD9"];
-function color(label) {
-  let h = 0;
-  for (const c of label) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return COLORS[h % COLORS.length];
-}
-
 function draw() {
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
-  ctx.clearRect(0, 0, w, h);
   const fresh = performance.now() - lastDetections.at < BOX_TTL_MS;
-  if (showBoxes.checked && fresh) {
-    ctx.lineWidth = 2;
-    ctx.font = "13px system-ui, sans-serif";
-    for (const o of lastDetections.objects) {
-      const [x0, y0, x1, y1] = o.box;
-      const c = color(o.label);
-      ctx.strokeStyle = c;
-      ctx.strokeRect(x0 * w, y0 * h, (x1 - x0) * w, (y1 - y0) * h);
-      const text = `${o.label} ${o.score.toFixed(2)}`;
-      const tw = ctx.measureText(text).width + 8;
-      ctx.fillStyle = c;
-      ctx.fillRect(x0 * w, Math.max(0, y0 * h - 18), tw, 18);
-      ctx.fillStyle = "#000";
-      ctx.fillText(text, x0 * w + 4, Math.max(13, y0 * h - 5));
-    }
-  }
+  PC.drawBoxes(canvas, showBoxes.checked && fresh ? lastDetections.objects : []);
   requestAnimationFrame(draw);
 }
 

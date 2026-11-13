@@ -136,6 +136,15 @@ video.addEventListener("error", () => {
   setTimeout(startVideo, 3000);
 });
 
+// detection boxes, as on the live page
+const overlay = document.getElementById("overlay");
+let detections = { objects: [], at: 0 };
+PC.on("detections", (d) => { detections = { objects: d.objects || [], at: performance.now() }; });
+(function drawBoxes() {
+  PC.drawBoxes(overlay, performance.now() - detections.at < 600 ? detections.objects : []);
+  requestAnimationFrame(drawBoxes);
+})();
+
 function chip(text, level) {
   return PC.el("span", { class: "chip" }, PC.el("span", { class: "dot " + (level || "") }), text);
 }
@@ -197,8 +206,26 @@ function drawMap(m) {
     ctx.stroke();
     ctx.fillText(cm + " cm", center + 4, center - cm * scale + 12);
   }
+  // live map (demo replay): rays coloured by sensor, a dot where they hit
+  for (const r of (m && m.rays) || []) {
+    const a = r.heading_deg * Math.PI / 180;
+    const d = Math.min(r.cm, radius) * scale;
+    const x = center - Math.sin(a) * d, y = center - Math.cos(a) * d;
+    const color = r.source === "ultrasonic" ? "245, 150, 40" : "48, 213, 192";
+    ctx.strokeStyle = `rgba(${color}, ${r.hit ? 0.6 : 0.2})`;
+    ctx.beginPath();
+    ctx.moveTo(center, center);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    if (r.hit) {
+      ctx.fillStyle = `rgb(${color})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 2.5, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+  }
   // measurement rays: heading 0 is up, positive turns left (counter-clockwise)
-  for (const s of (m && m.samples) || []) {
+  for (const s of (m && !m.rays && m.samples) || []) {
     const a = s.heading_deg * Math.PI / 180;
     const d = Math.min(s.cm == null ? radius : s.cm, radius) * scale;
     ctx.strokeStyle = s.cm == null ? "rgba(244, 240, 255, 0.15)" : "rgba(160, 243, 227, 0.55)";

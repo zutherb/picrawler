@@ -7,6 +7,10 @@ runs on the web server's event loop thread.
 import time
 
 LOGGED_EVENTS = ("event/stop", "event/watchdog", "event/rejected", "event/battery")
+# Latest payload and receipt time of these, for the hardware check (services/web/hardware.py).
+HARDWARE_TOPICS = ("status", "state/battery", "sensor/ultrasonic/status", "sensor/ultrasonic/distance",
+                   "sensor/vision/status", "sensor/gamepad/status", "sensor/speech/status", "voice/status",
+                   "display/status", "display/frame")
 PRUNE_EVERY_S = 3600.0
 
 
@@ -24,6 +28,7 @@ class LiveState:
         self.vision_mode = "detect"
         self.display_frame = None         # latest OLED picture (display/frame)
         self.local_map = None             # latest scan (map/local)
+        self.facts = {}                   # suffix -> (payload, received), HARDWARE_TOPICS only
         self._dirty = True
         self._last_prune = None
 
@@ -32,6 +37,8 @@ class LiveState:
     def on_message(self, suffix, payload, retain=False):
         if not isinstance(payload, dict):
             return
+        if suffix in HARDWARE_TOPICS:
+            self.facts[suffix] = (payload, self._wall())
         if suffix == "status":
             self._set("body", payload)
         elif suffix == "state/motion":

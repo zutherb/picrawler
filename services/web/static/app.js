@@ -127,6 +127,39 @@ const PC = {
     el.title = `${b.voltage.toFixed(2)} V, ${b.level}`;
   },
 
+  // Detection boxes over the video; canvas sized like the image (normalized boxes).
+  BOX_COLORS: ["#30D5C0", "#A0F3E3", "#FEBC2E", "#FF5F57", "#B8ADD9"],
+  boxColor(label) {
+    let h = 0;
+    for (const c of label) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return PC.BOX_COLORS[h % PC.BOX_COLORS.length];
+  },
+  drawBoxes(canvas, objects) {
+    const ctx = canvas.getContext("2d");
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    ctx.clearRect(0, 0, w, h);
+    ctx.lineWidth = 2;
+    ctx.font = "13px system-ui, sans-serif";
+    const placed = [];          // label rectangles, stacked so they never overlap
+    for (const o of objects) {
+      const [x0, y0, x1, y1] = o.box;
+      const c = PC.boxColor(o.label);
+      ctx.strokeStyle = c;
+      ctx.strokeRect(x0 * w, y0 * h, (x1 - x0) * w, (y1 - y0) * h);
+      const text = `${o.label} ${o.score.toFixed(2)}` + (o.floor_cm != null ? ` · ${Math.round(o.floor_cm)} cm` : "");
+      const tw = ctx.measureText(text).width + 8;
+      const x = x0 * w;
+      let y = Math.max(0, y0 * h - 18);
+      while (placed.some((r) => x < r.x + r.w + 4 && r.x < x + tw + 4 && y < r.y + 20 && r.y < y + 20)) y += 20;
+      placed.push({ x, y, w: tw });
+      ctx.fillStyle = c;
+      ctx.fillRect(x, y, tw, 18);
+      ctx.fillStyle = "#000";
+      ctx.fillText(text, x + 4, y + 13);
+    }
+  },
+
   // OLED mirror: 1-bit frame (8 px per byte, MSB = leftmost, 1 = lit).
   drawOled(canvas, frame) {
     const ctx = canvas.getContext("2d");

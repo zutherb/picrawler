@@ -10,6 +10,7 @@ from aiohttp import ClientError, ClientSession, ClientTimeout, web
 from services.common.mqtt import encode
 
 from .bluetooth import BluetoothError
+from .hardware import assess
 from .system import SystemActionError
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -76,6 +77,7 @@ class WebApp:
         self.bus = bus
         self.bluetooth = bluetooth
         self.system = system
+        self.demo = None                  # services/web/demo.py DemoPlayer in the mock
         self.store = store
         self.fake = fake
         self.monitor = monitor
@@ -115,6 +117,7 @@ class WebApp:
         r.add_post("/api/mqtt/clear", self.mqtt_clear)
         r.add_get("/api/display", self.display_frame)
         r.add_get("/api/system", self.system_info)
+        r.add_get("/api/system/hardware", self.system_hardware)
         r.add_get("/api/system/journal", self.system_journal)
         r.add_post("/api/system/restart", self.system_restart)
         r.add_post("/api/system/power", self.system_power)
@@ -249,14 +252,15 @@ class WebApp:
     async def _fake_stream(self, request):
         from services.vision.camera import TESTCARD
         with open(TESTCARD, "rb") as f:
-            frame = f.read()
+            testcard = f.read()
         response = web.StreamResponse(headers={"Content-Type": "multipart/x-mixed-replace; boundary=frame"})
         await response.prepare(request)
         try:
             while True:
+                frame = self.demo.frame() if self.demo else testcard
                 await response.write(b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n%s\r\n"
                                      % (len(frame), frame))
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(1.0 / self.demo.fps if self.demo else 0.2)
         except (ConnectionResetError, asyncio.CancelledError):
             pass
         return response
@@ -446,6 +450,11 @@ class WebApp:
     @requires_admin
     async def system_info(self, request):
         return web.json_response({"services": await self.system.services(), "info": await self.system.info()})
+
+    @requires_admin
+    async def system_hardware(self, request):
+        local = await self.system.hardware(fresh=request.query.get("fresh") == "1")
+        return web.json_response({"components": assess(local, self.state.facts, time.time()), "local": local})
 
     @requires_admin
     async def system_journal(self, request):

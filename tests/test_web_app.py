@@ -87,6 +87,7 @@ if AioHTTPTestCase is not None:
                                ("/api/map/scan", {})):
                 self.assertEqual((await self.post(path, body, csrf)).status, 403, path)
             self.assertEqual((await self.client.get("/api/system")).status, 403)
+            self.assertEqual((await self.client.get("/api/system/hardware")).status, 403)
             self.assertEqual((await self.client.get("/api/mqtt/topics")).status, 403)
             self.assertEqual((await self.client.get("/api/mqtt/messages")).status, 403)
             self.assertEqual((await self.client.get("/mqtt", allow_redirects=False)).status, 302)
@@ -178,6 +179,19 @@ if AioHTTPTestCase is not None:
             self.assertEqual((await self.post("/logout", {}, csrf)).status, 200)
             self.assertEqual((await self.client.get("/api/me")).status, 401)
 
+        async def test_hardware_check(self):
+            state = self.webapp.state
+            state.on_message("status", {"status": "online"})
+            state.on_message("state/battery", {"present": True, "voltage": 7.9, "percent": 75, "level": "ok"})
+            state.on_message("sensor/ultrasonic/status", {"status": "online"})
+            await self.login("anna")
+            data = await (await self.client.get("/api/system/hardware?fresh=1")).json()
+            parts = {c["name"]: c for c in data["components"]}
+            self.assertEqual(parts["Robot HAT & servos"]["status"], "ok")
+            self.assertEqual(parts["Battery"]["detail"], "7.90 V · 75 %")
+            self.assertEqual(parts["Ultrasonic"]["status"], "warn")          # online, no readings yet
+            self.assertEqual(parts["Camera"]["status"], "warn")              # found, vision offline
+            self.assertEqual(data["local"]["tpu_devices"], ["apex_0"])
 
 if __name__ == "__main__":
     unittest.main()
