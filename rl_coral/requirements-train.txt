@@ -1,0 +1,7 @@
+# Training and export (desktop / x86-64 Linux recommended; edgetpu_compiler is x86-64 Linux only)
+numpy
+gymnasium>=1.0
+pybullet>=3.2.6
+stable-baselines3>=2.3
+torch
+tensorflow>=2.16

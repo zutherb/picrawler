@@ -1,0 +1,5 @@
+# On the Pi 5 (64-bit Raspberry Pi OS, 4K page kernel, libedgetpu1-std from the Coral apt repo)
+numpy
+opencv-python-headless
+ai-edge-litert
+# picamera2 and robot_hat come from apt / source, see spikes/coral and the main README

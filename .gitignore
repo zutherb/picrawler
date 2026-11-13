@@ -11,3 +11,4 @@ __pycache__/
 .ansible/
 apps/ios/*.xcodeproj/
 apps/ios/build/
+rl_coral/models/

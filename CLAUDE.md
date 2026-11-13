@@ -30,12 +30,13 @@ services/         # python -m services.<name> --config x.toml [--fake]; needs Py
   arbiter/        # Arbiter: rules, heartbeat, Manual > Scan (scan.py, local map) > AgentGoals > Wander
   sensor_ultrasonic/, sensor_gamepad/
   vision/         # camera, MJPEG on 127.0.0.1:8081, Edge TPU detector; geometry.py + floor.py (floor edge for the map)
-  web/            # aiohttp UI: login, SSE, object log, admin; static/ has no inline JS (CSP)
+  web/            # aiohttp UI: login, SSE, object log, admin (+ hardware.py check); static/ has no inline JS (CSP); --fake --demo replays rl_coral/demo_kitchen.py
   sensor_speech/  # mic + VAD + whisper-server client; agent/ (World, tools, brains); voice/ (Piper)
   display/        # OLED: sysinfo.py reads /proc+/sys, render.py draws a 128x64 1-bit image (testable, Pillow)
 deploy/ansible/   # Pi provisioning; unit names/configs must match services/
 tests/            # unittest; tests/fake_robot_hat.py stands in for the hardware; aiohttp/numpy tests skip if missing
 examples/         # motion demos, must run on the robot with sudo
+rl_coral/         # sim-to-real RL gait: PyBullet env, PPO -> int8 TFLite, 50 Hz loop on the Coral; bypasses MQTT
 ```
 
 - **Servo-order pitfall:** `coord2polar()` returns `[alpha, beta, gamma]` (femur, knee, hip) but each leg's servos are wired `[beta, alpha, gamma]`. `polar2coord()`, `limit_angle()` and `set_angle()` take servo order. Use `leg_servo_angles()`.
@@ -49,6 +50,7 @@ examples/         # motion demos, must run on the robot with sudo
 - `cmd/stop` must never be rejected. GOAL commands need a recent `cmd/heartbeat`.
 - Agent tools return English text for the model; spoken fixed replies come from a language table. German command words in `KeywordBrain` are data, keep them.
 - Broker ACLs live in `services/common/topics.py`; regenerate `deploy/ansible/roles/mosquitto/vars/main.yml` with `python -m services.common.topics > …`. `tests/test_topics.py` checks every service's publish/subscribe calls against it.
+- `rl_coral/common.py` is the policy's data contract (32-dim observation, CPG, body->leg frames); sim and robot loop must both go through it.
 - Only the arbiter writes `cmd/action`. The agent sends `agent/goal`; the body has its own obstacle interlock.
 
 ## Calibration data

@@ -1,0 +1,405 @@
+<?xml version="1.0"?>
+<!-- SunFounder PiCrawler for rl_coral/sim_env.py. Generated geometry, units m / kg.
+     Link lengths match picrawler/kinematics.py (coxa C=33, femur A=48, tibia B=78 mm),
+     hips on a 77 mm square (MoveList.LENGTH_SIDE), legs at the 45 degree corners.
+     Body frame: x right, y forward, z up. Joint zero: leg on its diagonal, femur
+     horizontal, tibia in line with the femur. See rl_coral/common.py joint_angles(). -->
+<robot name="picrawler">
+  <material name="body"><color rgba="0.15 0.18 0.22 1"/></material>
+  <material name="leg"><color rgba="0.12 0.62 0.62 1"/></material>
+  <material name="foot"><color rgba="0.9 0.9 0.9 1"/></material>
+  <link name="torso">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.55"/>
+      <inertia ixx="6.107e-04" ixy="0" ixz="0" iyy="6.107e-04" iyz="0" izz="1.109e-03"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.11 0.11 0.035"/></geometry>
+      <material name="body"/>
+    </visual>
+    <collision>
+      <geometry><box size="0.11 0.11 0.035"/></geometry>
+    </collision>
+  </link>
+  <link name="camera">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1.000e-08" ixy="0" ixz="0" iyy="1.000e-08" iyz="0" izz="1.000e-08"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.025 0.01 0.025"/></geometry>
+      <material name="foot"/>
+    </visual>
+  </link>
+  <joint name="camera_mount" type="fixed">
+    <parent link="torso"/>
+    <child link="camera"/>
+    <origin xyz="0 0.06 0.02"/>
+  </joint>
+  <joint name="rf_hip" type="revolute">
+    <parent link="torso"/>
+    <child link="rf_coxa"/>
+    <origin xyz="0.0385 0.0385 0" rpy="0 0 0.785398"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.0472" upper="1.0472" effort="1.8" velocity="8.5"/>
+    <dynamics damping="0.02" friction="0.01"/>
+  </joint>
+  <link name="rf_coxa">
+    <inertial>
+      <origin xyz="0.0165 0 0"/>
+      <mass value="0.02"/>
+      <inertia ixx="6.400e-07" ixy="0" ixz="0" iyy="2.135e-06" iyz="0" izz="2.135e-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.0165 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.008" length="0.033"/></geometry>
+      <material name="leg"/>
+    </visual>
+    <collision>
+      <origin xyz="0.0165 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.008" length="0.033"/></geometry>
+    </collision>
+  </link>
+  <joint name="rf_femur" type="revolute">
+    <parent link="rf_coxa"/>
+    <child link="rf_femur"/>
+    <origin xyz="0.033 0 0" rpy="0 0 0"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="0.0000" upper="1.7453" effort="1.8" velocity="8.5"/>
+    <dynamics damping="0.02" friction="0.01"/>
+  </joint>
+  <link name="rf_femur">
+    <inertial>
+      <origin xyz="0.024 0 0"/>
+      <mass value="0.015"/>
+      <inertia ixx="2.700e-07" ixy="0" ixz="0" iyy="3.015e-06" iyz="0" izz="3.015e-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.024 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.006" length="0.048"/></geometry>
+      <material name="leg"/>
+    </visual>
+    <collision>
+      <origin xyz="0.024 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.006" length="0.048"/></geometry>
+    </collision>
+  </link>
+  <joint name="rf_knee" type="revolute">
+    <parent link="rf_femur"/>
+    <child link="rf_tibia"/>
+    <origin xyz="0.048 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="0.0000" upper="3.1416" effort="1.8" velocity="8.5"/>
+    <dynamics damping="0.02" friction="0.01"/>
+  </joint>
+  <link name="rf_tibia">
+    <inertial>
+      <origin xyz="0.039 0 0"/>
+      <mass value="0.015"/>
+      <inertia ixx="1.200e-07" ixy="0" ixz="0" iyy="7.665e-06" iyz="0" izz="7.665e-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.039 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.004" length="0.078"/></geometry>
+      <material name="leg"/>
+    </visual>
+    <collision>
+      <origin xyz="0.039 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.004" length="0.078"/></geometry>
+    </collision>
+  </link>
+  <link name="rf_foot">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.003"/>
+      <inertia ixx="4.300e-08" ixy="0" ixz="0" iyy="4.300e-08" iyz="0" izz="4.300e-08"/>
+    </inertial>
+    <visual>
+      <geometry><sphere radius="0.006"/></geometry>
+      <material name="foot"/>
+    </visual>
+    <collision>
+      <geometry><sphere radius="0.006"/></geometry>
+    </collision>
+  </link>
+  <joint name="rf_foot_fixed" type="fixed">
+    <parent link="rf_tibia"/>
+    <child link="rf_foot"/>
+    <origin xyz="0.078 0 0"/>
+  </joint>
+  <joint name="lf_hip" type="revolute">
+    <parent link="torso"/>
+    <child link="lf_coxa"/>
+    <origin xyz="-0.0385 0.0385 0" rpy="0 0 2.356194"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.0472" upper="1.0472" effort="1.8" velocity="8.5"/>
+    <dynamics damping="0.02" friction="0.01"/>
+  </joint>
+  <link name="lf_coxa">
+    <inertial>
+      <origin xyz="0.0165 0 0"/>
+      <mass value="0.02"/>
+      <inertia ixx="6.400e-07" ixy="0" ixz="0" iyy="2.135e-06" iyz="0" izz="2.135e-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.0165 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.008" length="0.033"/></geometry>
+      <material name="leg"/>
+    </visual>
+    <collision>
+      <origin xyz="0.0165 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.008" length="0.033"/></geometry>
+    </collision>
+  </link>
+  <joint name="lf_femur" type="revolute">
+    <parent link="lf_coxa"/>
+    <child link="lf_femur"/>
+    <origin xyz="0.033 0 0" rpy="0 0 0"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="0.0000" upper="1.7453" effort="1.8" velocity="8.5"/>
+    <dynamics damping="0.02" friction="0.01"/>
+  </joint>
+  <link name="lf_femur">
+    <inertial>
+      <origin xyz="0.024 0 0"/>
+      <mass value="0.015"/>
+      <inertia ixx="2.700e-07" ixy="0" ixz="0" iyy="3.015e-06" iyz="0" izz="3.015e-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.024 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.006" length="0.048"/></geometry>
+      <material name="leg"/>
+    </visual>
+    <collision>
+      <origin xyz="0.024 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.006" length="0.048"/></geometry>
+    </collision>
+  </link>
+  <joint name="lf_knee" type="revolute">
+    <parent link="lf_femur"/>
+    <child link="lf_tibia"/>
+    <origin xyz="0.048 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="0.0000" upper="3.1416" effort="1.8" velocity="8.5"/>
+    <dynamics damping="0.02" friction="0.01"/>
+  </joint>
+  <link name="lf_tibia">
+    <inertial>
+      <origin xyz="0.039 0 0"/>
+      <mass value="0.015"/>
+      <inertia ixx="1.200e-07" ixy="0" ixz="0" iyy="7.665e-06" iyz="0" izz="7.665e-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.039 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.004" length="0.078"/></geometry>
+      <material name="leg"/>
+    </visual>
+    <collision>
+      <origin xyz="0.039 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.004" length="0.078"/></geometry>
+    </collision>
+  </link>
+  <link name="lf_foot">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.003"/>
+      <inertia ixx="4.300e-08" ixy="0" ixz="0" iyy="4.300e-08" iyz="0" izz="4.300e-08"/>
+    </inertial>
+    <visual>
+      <geometry><sphere radius="0.006"/></geometry>
+      <material name="foot"/>
+    </visual>
+    <collision>
+      <geometry><sphere radius="0.006"/></geometry>
+    </collision>
+  </link>
+  <joint name="lf_foot_fixed" type="fixed">
+    <parent link="lf_tibia"/>
+    <child link="lf_foot"/>
+    <origin xyz="0.078 0 0"/>
+  </joint>
+  <joint name="lr_hip" type="revolute">
+    <parent link="torso"/>
+    <child link="lr_coxa"/>
+    <origin xyz="-0.0385 -0.0385 0" rpy="0 0 -2.356194"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.0472" upper="1.0472" effort="1.8" velocity="8.5"/>
+    <dynamics damping="0.02" friction="0.01"/>
+  </joint>
+  <link name="lr_coxa">
+    <inertial>
+      <origin xyz="0.0165 0 0"/>
+      <mass value="0.02"/>
+      <inertia ixx="6.400e-07" ixy="0" ixz="0" iyy="2.135e-06" iyz="0" izz="2.135e-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.0165 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.008" length="0.033"/></geometry>
+      <material name="leg"/>
+    </visual>
+    <collision>
+      <origin xyz="0.0165 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.008" length="0.033"/></geometry>
+    </collision>
+  </link>
+  <joint name="lr_femur" type="revolute">
+    <parent link="lr_coxa"/>
+    <child link="lr_femur"/>
+    <origin xyz="0.033 0 0" rpy="0 0 0"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="0.0000" upper="1.7453" effort="1.8" velocity="8.5"/>
+    <dynamics damping="0.02" friction="0.01"/>
+  </joint>
+  <link name="lr_femur">
+    <inertial>
+      <origin xyz="0.024 0 0"/>
+      <mass value="0.015"/>
+      <inertia ixx="2.700e-07" ixy="0" ixz="0" iyy="3.015e-06" iyz="0" izz="3.015e-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.024 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.006" length="0.048"/></geometry>
+      <material name="leg"/>
+    </visual>
+    <collision>
+      <origin xyz="0.024 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.006" length="0.048"/></geometry>
+    </collision>
+  </link>
+  <joint name="lr_knee" type="revolute">
+    <parent link="lr_femur"/>
+    <child link="lr_tibia"/>
+    <origin xyz="0.048 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="0.0000" upper="3.1416" effort="1.8" velocity="8.5"/>
+    <dynamics damping="0.02" friction="0.01"/>
+  </joint>
+  <link name="lr_tibia">
+    <inertial>
+      <origin xyz="0.039 0 0"/>
+      <mass value="0.015"/>
+      <inertia ixx="1.200e-07" ixy="0" ixz="0" iyy="7.665e-06" iyz="0" izz="7.665e-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.039 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.004" length="0.078"/></geometry>
+      <material name="leg"/>
+    </visual>
+    <collision>
+      <origin xyz="0.039 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.004" length="0.078"/></geometry>
+    </collision>
+  </link>
+  <link name="lr_foot">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.003"/>
+      <inertia ixx="4.300e-08" ixy="0" ixz="0" iyy="4.300e-08" iyz="0" izz="4.300e-08"/>
+    </inertial>
+    <visual>
+      <geometry><sphere radius="0.006"/></geometry>
+      <material name="foot"/>
+    </visual>
+    <collision>
+      <geometry><sphere radius="0.006"/></geometry>
+    </collision>
+  </link>
+  <joint name="lr_foot_fixed" type="fixed">
+    <parent link="lr_tibia"/>
+    <child link="lr_foot"/>
+    <origin xyz="0.078 0 0"/>
+  </joint>
+  <joint name="rr_hip" type="revolute">
+    <parent link="torso"/>
+    <child link="rr_coxa"/>
+    <origin xyz="0.0385 -0.0385 0" rpy="0 0 -0.785398"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.0472" upper="1.0472" effort="1.8" velocity="8.5"/>
+    <dynamics damping="0.02" friction="0.01"/>
+  </joint>
+  <link name="rr_coxa">
+    <inertial>
+      <origin xyz="0.0165 0 0"/>
+      <mass value="0.02"/>
+      <inertia ixx="6.400e-07" ixy="0" ixz="0" iyy="2.135e-06" iyz="0" izz="2.135e-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.0165 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.008" length="0.033"/></geometry>
+      <material name="leg"/>
+    </visual>
+    <collision>
+      <origin xyz="0.0165 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.008" length="0.033"/></geometry>
+    </collision>
+  </link>
+  <joint name="rr_femur" type="revolute">
+    <parent link="rr_coxa"/>
+    <child link="rr_femur"/>
+    <origin xyz="0.033 0 0" rpy="0 0 0"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="0.0000" upper="1.7453" effort="1.8" velocity="8.5"/>
+    <dynamics damping="0.02" friction="0.01"/>
+  </joint>
+  <link name="rr_femur">
+    <inertial>
+      <origin xyz="0.024 0 0"/>
+      <mass value="0.015"/>
+      <inertia ixx="2.700e-07" ixy="0" ixz="0" iyy="3.015e-06" iyz="0" izz="3.015e-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.024 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.006" length="0.048"/></geometry>
+      <material name="leg"/>
+    </visual>
+    <collision>
+      <origin xyz="0.024 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.006" length="0.048"/></geometry>
+    </collision>
+  </link>
+  <joint name="rr_knee" type="revolute">
+    <parent link="rr_femur"/>
+    <child link="rr_tibia"/>
+    <origin xyz="0.048 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="0.0000" upper="3.1416" effort="1.8" velocity="8.5"/>
+    <dynamics damping="0.02" friction="0.01"/>
+  </joint>
+  <link name="rr_tibia">
+    <inertial>
+      <origin xyz="0.039 0 0"/>
+      <mass value="0.015"/>
+      <inertia ixx="1.200e-07" ixy="0" ixz="0" iyy="7.665e-06" iyz="0" izz="7.665e-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.039 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.004" length="0.078"/></geometry>
+      <material name="leg"/>
+    </visual>
+    <collision>
+      <origin xyz="0.039 0 0" rpy="0 1.5707963 0"/>
+      <geometry><cylinder radius="0.004" length="0.078"/></geometry>
+    </collision>
+  </link>
+  <link name="rr_foot">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.003"/>
+      <inertia ixx="4.300e-08" ixy="0" ixz="0" iyy="4.300e-08" iyz="0" izz="4.300e-08"/>
+    </inertial>
+    <visual>
+      <geometry><sphere radius="0.006"/></geometry>
+      <material name="foot"/>
+    </visual>
+    <collision>
+      <geometry><sphere radius="0.006"/></geometry>
+    </collision>
+  </link>
+  <joint name="rr_foot_fixed" type="fixed">
+    <parent link="rr_tibia"/>
+    <child link="rr_foot"/>
+    <origin xyz="0.078 0 0"/>
+  </joint>
+</robot>
