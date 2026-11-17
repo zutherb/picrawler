@@ -62,7 +62,7 @@ struct RemoteView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text("PiCrawler").font(.system(size: 16, weight: .bold)).foregroundStyle(Theme.text)
                 HStack(spacing: 5) {
-                    Circle().fill(model.linkUp ? Theme.accent : Theme.bad).frame(width: 7, height: 7)
+                    Circle().fill(model.linkUp ? Theme.ok : Theme.bad).frame(width: 7, height: 7)
                     Text("picrawler@\(robot.host)").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.muted)
                         .lineLimit(1).truncationMode(.middle)
                 }
@@ -209,7 +209,7 @@ struct BatteryPill: View {
         }
     }
 
-    private var color: Color { level == "critical" ? Theme.bad : level == "low" ? Theme.warn : Theme.accent }
+    private var color: Color { level == "critical" ? Theme.bad : level == "low" ? Theme.warn : Theme.ok }
 }
 
 /// Shows the newest JPEG of the MJPEG stream.

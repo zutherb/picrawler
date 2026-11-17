@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 #endif
 
-/// Virtual joystick like the web remote: drag the teal thumb. Reports the
+/// Virtual joystick like the web remote: drag the amber thumb. Reports the
 /// stick (x, y in -1…1, up is negative) every 150 ms while held, and one
 /// centered report on release, so the robot works as a dead man's switch.
 struct JoystickView: View {

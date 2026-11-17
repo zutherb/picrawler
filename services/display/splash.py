@@ -16,13 +16,13 @@ WIDTH, HEIGHT = 128, 64
 
 
 ROBOT = os.path.join(os.path.dirname(__file__), "assets", "robot.png")
-BACKGROUND = (80, 49, 153)      # purple of the original artwork
+BACKGROUND = (20, 22, 29)       # #14161D, dark background of the artwork
 
 
 def robot_bitmap(height=62):
     """The robot from the project artwork as a 1-bit picture.
 
-    White shell fully lit, blue parts (ears, joints) dithered, background,
+    White shell fully lit, amber parts (ears, joints) dithered, background,
     visor and the pink cheeks dark, so the ring eyes stay clean.
     """
     from PIL import Image, ImageChops
@@ -34,12 +34,15 @@ def robot_bitmap(height=62):
     for y in range(src.height):
         for x in range(src.width):
             r, g, b = pixels[x, y]
-            if r > 150 and r - g > 50 and r - b > 30:
+            if r > 150 and r - g > 50 and r - b > 30 and b > g - 25:   # pink, not amber
                 pixels[x, y] = (10, 12, 40)
     small = src.resize((round(src.width * height / src.height), height), Image.LANCZOS)
     background = ImageChops.difference(small, Image.new("RGB", small.size, BACKGROUND)).convert("L")
     keep = background.point(lambda v: 255 if v > 70 else 0)
-    gray = Image.composite(small.convert("L"), Image.new("L", small.size, 0), keep)
+    # red weighted down: amber (low blue) lands mid-gray (~125) and gets
+    # dithered, the white shell stays fully lit
+    luma = small.convert("L", (0.15, 0.55, 0.3, 0))
+    gray = Image.composite(luma, Image.new("L", small.size, 0), keep)
     return gray.point(lambda v: 255 if v > 170 else (v if v > 80 else 0)).convert("1")
 
 

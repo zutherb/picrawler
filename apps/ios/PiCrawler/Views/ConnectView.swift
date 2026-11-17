@@ -125,21 +125,25 @@ struct RobotList: View {
     }
 }
 
-/// The compact logo (head on a violet tile), drawn natively.
+/// The compact logo (head on a dark tile), drawn natively.
 struct RobotMark: View {
     var body: some View {
         GeometryReader { geo in
             let s = min(geo.size.width, geo.size.height) / 64
             ZStack {
                 RoundedRectangle(cornerRadius: 15 * s)
-                    .fill(LinearGradient(colors: [Color(hex: 0x3B1E7A), Theme.deep], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .fill(LinearGradient(colors: [Color(hex: 0x232631), Theme.deep2], startPoint: .topLeading, endPoint: .bottomTrailing))
                 Group {
-                    Capsule().fill(Color(hex: 0x2F6FE0)).frame(width: 9 * s, height: 19 * s).offset(x: -20.5 * s, y: 2.5 * s)
-                    Capsule().fill(Color(hex: 0x2F6FE0)).frame(width: 9 * s, height: 19 * s).offset(x: 20.5 * s, y: 2.5 * s)
-                    RoundedRectangle(cornerRadius: 17 * s).fill(.white).frame(width: 40 * s, height: 42 * s).offset(y: 2 * s)
-                    RoundedRectangle(cornerRadius: 9.5 * s).fill(Color(hex: 0x0B0A26)).frame(width: 30 * s, height: 24 * s).offset(y: 1 * s)
-                    Circle().stroke(Theme.accent, lineWidth: 2.6 * s).frame(width: 9.2 * s).offset(x: -6 * s, y: 0.5 * s)
-                    Circle().stroke(Theme.accent, lineWidth: 2.6 * s).frame(width: 9.2 * s).offset(x: 6 * s, y: 0.5 * s)
+                    Capsule().fill(Theme.accent).frame(width: 9 * s, height: 19 * s).offset(x: -20.5 * s, y: 2.5 * s)
+                    Capsule().fill(Theme.accent).frame(width: 9 * s, height: 19 * s).offset(x: 20.5 * s, y: 2.5 * s)
+                    RoundedRectangle(cornerRadius: 17 * s).fill(Color(hex: 0xFAF8F3)).frame(width: 40 * s, height: 42 * s).offset(y: 2 * s)
+                    RoundedRectangle(cornerRadius: 9.5 * s).fill(Color(hex: 0x0D0F14)).frame(width: 30 * s, height: 24 * s).offset(y: 1 * s)
+                    // comic eyes like logo-mark.svg: white eye, dark pupil, highlight
+                    ForEach([-6.0, 6.0], id: \.self) { x in
+                        Circle().fill(.white).frame(width: 9.2 * s).offset(x: x * s, y: 0.5 * s)
+                        Circle().fill(Theme.background).frame(width: 5.4 * s).offset(x: x * s, y: 0.5 * s)
+                        Circle().fill(.white.opacity(0.9)).frame(width: 1.7 * s).offset(x: (x - 1) * s, y: -0.7 * s)
+                    }
                     Circle().fill(.white).frame(width: 6.8 * s).offset(x: 14 * s, y: -25.5 * s)
                 }
             }

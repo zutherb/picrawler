@@ -189,7 +189,7 @@ function drawMap(m) {
     const cell = size / n;
     m.grid.forEach((row, r) => {
       for (let c = 0; c < row.length; c++) {
-        if (row[c] === ".") ctx.fillStyle = "rgba(48, 213, 192, 0.28)";
+        if (row[c] === ".") ctx.fillStyle = "rgba(179, 182, 194, 0.22)";
         else if (row[c] === "#") ctx.fillStyle = css.getPropertyValue("--warn");
         else continue;
         ctx.fillRect(c * cell, r * cell, Math.ceil(cell), Math.ceil(cell));
@@ -197,8 +197,8 @@ function drawMap(m) {
     });
   }
   // range rings
-  ctx.strokeStyle = "rgba(244, 240, 255, 0.12)";
-  ctx.fillStyle = "rgba(244, 240, 255, 0.45)";
+  ctx.strokeStyle = "rgba(244, 241, 234, 0.12)";
+  ctx.fillStyle = "rgba(244, 241, 234, 0.45)";
   ctx.font = "11px " + css.getPropertyValue("--font-mono");
   for (let cm = 50; cm <= radius; cm += 50) {
     ctx.beginPath();
@@ -211,7 +211,7 @@ function drawMap(m) {
     const a = r.heading_deg * Math.PI / 180;
     const d = Math.min(r.cm, radius) * scale;
     const x = center - Math.sin(a) * d, y = center - Math.cos(a) * d;
-    const color = r.source === "ultrasonic" ? "245, 150, 40" : "48, 213, 192";
+    const color = r.source === "ultrasonic" ? "255, 176, 32" : "244, 241, 234";
     ctx.strokeStyle = `rgba(${color}, ${r.hit ? 0.6 : 0.2})`;
     ctx.beginPath();
     ctx.moveTo(center, center);
@@ -228,7 +228,7 @@ function drawMap(m) {
   for (const s of (m && !m.rays && m.samples) || []) {
     const a = s.heading_deg * Math.PI / 180;
     const d = Math.min(s.cm == null ? radius : s.cm, radius) * scale;
-    ctx.strokeStyle = s.cm == null ? "rgba(244, 240, 255, 0.15)" : "rgba(160, 243, 227, 0.55)";
+    ctx.strokeStyle = s.cm == null ? "rgba(244, 241, 234, 0.15)" : "rgba(255, 197, 85, 0.55)";
     ctx.beginPath();
     ctx.moveTo(center, center);
     ctx.lineTo(center - Math.sin(a) * d, center - Math.cos(a) * d);
@@ -240,11 +240,11 @@ function drawMap(m) {
     const a = o.heading_deg * Math.PI / 180;
     const d = Math.min(o.cm == null ? radius * 0.92 : o.cm, radius * 0.92) * scale;
     const x = center - Math.sin(a) * d, y = center - Math.cos(a) * d;
-    ctx.fillStyle = o.cm == null ? "rgba(244, 240, 255, 0.55)" : "#F4F0FF";
+    ctx.fillStyle = o.cm == null ? "rgba(244, 241, 234, 0.55)" : "#F4F1EA";
     ctx.beginPath();
     ctx.arc(x, y, 5, 0, 2 * Math.PI);
     ctx.fill();
-    ctx.strokeStyle = "rgba(22, 10, 51, 0.9)";
+    ctx.strokeStyle = "rgba(13, 15, 20, 0.9)";
     ctx.lineWidth = 3;
     const label = o.cm == null ? o.label : `${o.label} ${Math.round(o.cm)} cm`;
     ctx.strokeText(label, x + 8, y + 4);

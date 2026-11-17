@@ -1,19 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="PiCrawler">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3B1E7A"/>
-      <stop offset="1" stop-color="#24104F"/>
+      <stop offset="0" stop-color="#232631"/>
+      <stop offset="1" stop-color="#0D0F14"/>
     </linearGradient>
     <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#E3E8F3"/>
+      <stop offset="1" stop-color="#F4F1EA"/>
     </linearGradient>
     <linearGradient id="ear" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3D8BFF"/>
-      <stop offset="1" stop-color="#2557C7"/>
+      <stop offset="0" stop-color="#FFC555"/>
+      <stop offset="1" stop-color="#E89A0C"/>
     </linearGradient>
   </defs>
   <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="none" stroke="#FFB020" stroke-opacity="0.45" stroke-width="1.2"/>
   <!-- antenna -->
   <path d="M41 15 L45 8" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round"/>
   <circle cx="46" cy="6.5" r="3.4" fill="#FFFFFF"/>
@@ -23,11 +24,11 @@
   <!-- head -->
   <rect x="12" y="13" width="40" height="42" rx="17" fill="url(#shell)"/>
   <!-- visor and eyes -->
-  <rect x="17" y="21" width="30" height="24" rx="9.5" fill="#0B0A26"/>
+  <rect x="17" y="21" width="30" height="24" rx="9.5" fill="#0D0F14"/>
   <circle cx="26" cy="32.5" r="4.6" fill="#FFFFFF"/>
   <circle cx="38" cy="32.5" r="4.6" fill="#FFFFFF"/>
-  <circle cx="26" cy="32.5" r="2.7" fill="#0F1027"/>
-  <circle cx="38" cy="32.5" r="2.7" fill="#0F1027"/>
+  <circle cx="26" cy="32.5" r="2.7" fill="#14161D"/>
+  <circle cx="38" cy="32.5" r="2.7" fill="#14161D"/>
   <circle cx="25" cy="31.3" r="0.85" fill="#FFFFFF" opacity="0.9"/>
   <circle cx="37" cy="31.3" r="0.85" fill="#FFFFFF" opacity="0.9"/>
   <ellipse cx="22" cy="40" rx="2.3" ry="1.4" fill="#FF8C8C"/>

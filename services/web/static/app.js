@@ -128,7 +128,7 @@ const PC = {
   },
 
   // Detection boxes over the video; canvas sized like the image (normalized boxes).
-  BOX_COLORS: ["#30D5C0", "#A0F3E3", "#FEBC2E", "#FF5F57", "#B8ADD9"],
+  BOX_COLORS: ["#FFB020", "#FFC555", "#FF8A3D", "#FF5F57", "#B3B6C2"],
   boxColor(label) {
     let h = 0;
     for (const c of label) h = (h * 31 + c.charCodeAt(0)) >>> 0;

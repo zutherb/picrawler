@@ -73,7 +73,7 @@ struct MapCanvas: View {
                     for (c, ch) in row.enumerated() where ch != "?" {
                         let rect = CGRect(x: origin.x + CGFloat(c) * cell, y: origin.y + CGFloat(r) * cell,
                                           width: cell + 0.5, height: cell + 0.5)
-                        context.fill(Path(rect), with: .color(ch == "#" ? Theme.warn : Theme.accent.opacity(0.28)))
+                        context.fill(Path(rect), with: .color(ch == "#" ? Theme.warn : Theme.muted.opacity(0.22)))
                     }
                 }
             }
@@ -141,7 +141,7 @@ struct MapPanel: View {
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.muted)
             HStack(spacing: 14) {
-                legend(Color(hex: 0x1F4A5E), "free")
+                legend(Color(hex: 0x3A3E4A), "free")
                 legend(Theme.warn, "obstacle")
                 legend(Theme.deep2, "unknown")
                 legend(Theme.text, "object")

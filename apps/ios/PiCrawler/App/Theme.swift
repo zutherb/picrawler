@@ -1,17 +1,19 @@
 import SwiftUI
 
-/// Colors and type of the web UI (after bernd-zuther.de): deep violet, teal
-/// accent, monospaced labels.
+/// Colors and type of the web UI (after the PiCrawler card on bernd-zuther.de):
+/// dark workshop look, amber accent, monospaced labels.
 enum Theme {
-    static let deep = Color(hex: 0x24104F)
-    static let deep2 = Color(hex: 0x160A33)
-    static let background = Color(hex: 0x120A26)
-    static let panel = Color(hex: 0x1E1138)
-    static let text = Color(hex: 0xF1EDF9)
-    static let muted = Color(hex: 0xA79BC9)
-    static let accent = Color(hex: 0x30D5C0)
-    static let accent2 = Color(hex: 0xA0F3E3)
-    static let warn = Color(hex: 0xFEBC2E)
+    static let deep = Color(hex: 0x14161D)
+    static let deep2 = Color(hex: 0x0D0F14)
+    static let background = Color(hex: 0x14161D)
+    static let panel = Color(hex: 0x1C1F28)
+    static let text = Color(hex: 0xF4F1EA)
+    static let muted = Color(hex: 0xB3B6C2)
+    static let accent = Color(hex: 0xFFB020)
+    static let accent2 = Color(hex: 0xFFC555)
+    /// Status green: amber is the brand accent and too close to `warn`.
+    static let ok = Color(hex: 0x3DD68C)
+    static let warn = Color(hex: 0xFF8A3D)
     static let bad = Color(hex: 0xFF5F57)
     static let stop = Color(hex: 0xE5484D)
     static let border = Color.white.opacity(0.10)
@@ -76,7 +78,7 @@ struct Chip: View {
 
     private var color: Color {
         switch level {
-        case .ok: return Theme.accent
+        case .ok: return Theme.ok
         case .warn: return Theme.warn
         case .bad: return Theme.bad
         case .neutral: return Theme.muted
