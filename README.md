@@ -37,6 +37,8 @@ needs `robot_hat` on the Raspberry Pi.
 cd ~/
 git clone -b 2.5.x --depth=1 https://github.com/sunfounder/robot-hat.git
 cd robot-hat && sudo python3 install.py
+cd ~/
+git clone https://github.com/zutherb/picrawler.git
 sudo pip3 install ~/picrawler --break-system-packages
 # for the keyboard examples:
 sudo pip3 install readchar --break-system-packages

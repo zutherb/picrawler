@@ -5,7 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "picrawler"
 authors = [
-  { name="sunfounder", email="service@sunfounder.com" },
+  { name="Bernd Zuther (zutherb)" },
+  { name="sunfounder", email="service@sunfounder.com" },   # upstream motion code
 ]
 description = "Motion framework (kinematics, gaits, servo control) for the SunFounder PiCrawler"
 readme = "README.md"
@@ -28,8 +29,9 @@ mqtt = ["paho-mqtt>=2,<3"]
 picrawler = "picrawler:__main__"
 
 [project.urls]
-Repository = "https://github.com/sunfounder/picrawler"
-Issues = "https://github.com/sunfounder/picrawler/issues"
+Repository = "https://github.com/zutherb/picrawler"
+Issues = "https://github.com/zutherb/picrawler/issues"
+Upstream = "https://github.com/sunfounder/picrawler"
 
 [tool.setuptools]
 packages = [
