@@ -22,7 +22,7 @@ deploy/ansible/   # provisions the Pi: Mosquitto, venv, systemd units
 apps/ios/         # iPhone/iPad remote control (SwiftUI), finds the robot via Bonjour or its hotspot
 rl_coral/         # sim-to-real RL gait on the Coral Edge TPU, 2D mapper (see rl_coral/README.md)
 spikes/coral/     # Coral TPU environment check and benchmark
-docs/             # target architecture, logo
+docs/             # target architecture, logo, visual style guide (STYLE_GUIDE.md)
 tests/            # run off-hardware with a fake robot_hat
 examples/         # motion-only demos (need the real robot)
 ```
@@ -85,6 +85,12 @@ from picrawler import kinematics, MoveList
 kinematics.leg_servo_angles([45, 45, -50])  # servo-order angles of one leg
 MoveList()['forward']                        # frames of the forward gait
 ```
+
+## Visual style
+
+Logo, mascot, colours and the list of every file that carries them:
+[docs/STYLE_GUIDE.md](docs/STYLE_GUIDE.md). Read it before changing any
+colour, icon or logo; PNGs must be re-rendered by hand.
 
 ## Tests
 

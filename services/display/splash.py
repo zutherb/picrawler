@@ -23,7 +23,8 @@ def robot_bitmap(height=62):
     """The robot from the project artwork as a 1-bit picture.
 
     White shell fully lit, amber parts (ears, joints) dithered, background,
-    visor and the pink cheeks dark, so the ring eyes stay clean.
+    visor and the pink cheeks dark, so the comic eyes (white eye, dark
+    pupil, highlight) stay clean.
     """
     from PIL import Image, ImageChops
 

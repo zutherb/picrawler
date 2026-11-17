@@ -54,6 +54,13 @@ spikes/coral/     # Coral TPU environment check + benchmark (spike M-V0)
 - `rl_coral/common.py` is the policy's data contract (32-dim observation, CPG, body->leg frames); sim and robot loop must both go through it.
 - Only the arbiter writes `cmd/action`. The agent sends `agent/goal`; the body has its own obstacle interlock.
 
+## Visual style (logo, colours, icons)
+
+Before touching any colour, logo, icon or the mascot, read `docs/STYLE_GUIDE.md`. Short version:
+- Mascot eyes are always three filled circles (white eye, dark pupil 55-60 % of the radius, small highlight top left), never a hollow ring.
+- Palette: amber `#FFB020`/`#FFC555` on dark `#14161D`/`#0D0F14`; amber as text on light backgrounds uses `--accent-text` (`#9A5B00`); status ok = green, warn = orange, bad = red, never amber.
+- The same brand lives in SVG, CSS, JS, Swift, JSON and PNG files (list in the guide, section 4). Change all of them in one commit; PNGs (`icon-1024.png`, `robot.png`) have no build step and must be re-rendered by hand. `docs/logo.svg` is a copy of `services/web/static/logo.svg`.
+
 ## Calibration data
 
 Servo offsets are stored at `~/.config/.picrawler.config`, read/written by `robot_hat.Robot` via the `db` parameter.
