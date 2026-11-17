@@ -65,7 +65,7 @@ class RenderTest(unittest.TestCase):
         from services.display.render import render
         three = render(self.INFO)
         four = render(dict(self.INFO, nvme=10))
-        self.assertNotEqual(list(three.getdata()), list(four.getdata()))
+        self.assertNotEqual(three.tobytes(), four.tobytes())
 
     def test_shift_moves_the_picture(self):
         from services.display.render import render
@@ -97,7 +97,7 @@ class RenderTest(unittest.TestCase):
         bat = {"present": True, "voltage": 7.6, "percent": 58, "level": "ok"}
         info = dict(self.INFO, nvme=8, battery=bat, ip="10.0.0.2")
         self.assertEqual(header_text(info), "10.0.0.2")
-        self.assertNotEqual(list(render(info).getdata()), list(render(dict(info, battery=None)).getdata()))
+        self.assertNotEqual(render(info).tobytes(), render(dict(info, battery=None)).tobytes())
         render(dict(info, battery={"present": False}))
 
     def test_frame_payload_decodes_like_the_browser(self):

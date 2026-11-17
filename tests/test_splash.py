@@ -104,7 +104,8 @@ class SplashArtTest(unittest.TestCase):
     def test_splash_states(self):
         from services.display.splash import draw_splash
         boot, down = draw_splash("boot"), draw_splash("shutdown")
-        self.assertGreater(sum(1 for p in boot.getdata() if p), 500)
+        lit = boot.width * boot.height - boot.convert("L").histogram()[0]   # no getdata(): deprecated in Pillow 12
+        self.assertGreater(lit, 500)
         below = lambda img: [img.getpixel((x, y)) for x in range(52, 76) for y in range(51, 64)]
         self.assertNotEqual(below(boot), below(down))              # different state icon under the robot
         robot = lambda img: [img.getpixel((x, y)) for x in range(30, 98) for y in range(0, 50)]
@@ -123,7 +124,8 @@ class SplashArtTest(unittest.TestCase):
             out = os.path.join(d, "s.bin")
             subprocess.run([sys.executable, "-m", "services.display.splash", "--state", "shutdown", "--export", out],
                            check=True, cwd=os.path.join(os.path.dirname(__file__), ".."))
-            data = open(out, "rb").read()
+            with open(out, "rb") as f:
+                data = f.read()
         self.assertEqual(len(data), 2048)
         self.assertNotEqual(data[:1024], data[1024:])
 

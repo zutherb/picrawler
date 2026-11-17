@@ -74,7 +74,8 @@ class WatchTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "sub", "network.json")
             self.mod.write_status(path, {"mode": "hotspot", "ip": "10.42.0.1"})
-            self.assertEqual(json.load(open(path))["mode"], "hotspot")
+            with open(path) as f:
+                self.assertEqual(json.load(f)["mode"], "hotspot")
             self.assertFalse(os.path.exists(path + ".tmp"))
 
 
