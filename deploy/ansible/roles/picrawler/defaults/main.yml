@@ -231,3 +231,7 @@ picrawler_web_allow_plaintext: false
 # [{name, role: admin|viewer, password_hash}], hash: python -m services.web.hashpw
 picrawler_web_users: []
 picrawler_web_log_retention_days: 7
+picrawler_web_log_max_entries: 10000
+# Same as the code default of [log] path in services/web. Until 2026-11 the
+# role used /var/lib/picrawler-web/log.db; that old file is unused now.
+picrawler_web_log_path: "{{ picrawler_state_dir }}/web/log.db"

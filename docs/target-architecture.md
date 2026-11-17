@@ -29,7 +29,11 @@ change the motion core.
 - Control loops above 20 Hz over MQTT (e.g. balancing with an IMU). Such
   control loops run locally in the executor.
 - Individual gait frames as a real-time stream over the network.
-- Navigation, mapping, multiple robots (evaluate ROS 2 for that later).
+- Global navigation (path planning to distant goals), persistent or
+  server-/cloud-side maps (SLAM) and multiple robots (evaluate ROS 2 for
+  that later). In scope is **local, robot-centric occupancy mapping** on
+  the Pi: the arbiter's scan map (section 6a) and the 2D log-odds grid in
+  `rl_coral/occupancy_mapper_2d.py`.
 
 ## 2. Components
 
@@ -555,10 +559,11 @@ would be unreadable. The web-service therefore aggregates them into **sightings*
   (`detect`/`imprint`). Gestures from `pose` appear as separate entries
   (`gesture: wave`), as do body events (`event/rejected`, stops
   caused by the ultrasonic sensor).
-- Storage in SQLite under `/var/lib/picrawler/web/log.db`, retention
+- Storage in SQLite under `/var/lib/picrawler/web/log.db` (code default
+  of `[log] path`; Ansible deploys the same path, see 8.6), retention
   by default 7 days or at most 10 000 entries.
-- **No storing of images** (in line with 7.6 Privacy). Optionally
-  enableable: a small thumbnail per sighting, off by default.
+- **No storing of images** (in line with 7.6 Privacy). There are no
+  thumbnails either; a sighting is text only.
 
 The aggregation lives in the web-service and not in the vision-service, because
 the arbiter needs the raw per-frame data.
@@ -635,13 +640,22 @@ role = "admin"
 password_hash = "scrypt$…"      # from Ansible Vault
 
 [log]
+path = "/var/lib/picrawler/web/log.db"   # code default; dir owned by picrawler-web
 min_score = 0.5
 start_frames = 3
 end_after_s = 2.0
 retention_days = 7
 max_entries = 10000
-thumbnails = false
 ```
+
+The log database lives in `/var/lib/picrawler/web/` on every install: it
+is the code default and Ansible creates that directory (owner
+`picrawler-web`, mode 0750) and writes the same path into `web.toml`.
+Ansible deployments before this change wrote
+`/var/lib/picrawler-web/log.db` (the web user's home); that old file is no
+longer read and can be deleted, its entries expire after
+`retention_days` anyway. `/var/lib/picrawler-web` stays the web user's
+home.
 
 ### 8.7 Tests
 
@@ -758,6 +772,12 @@ lockout_s = 1.0
 heartbeat_timeout_s = 1.0
 sit_after_disconnect_s = 5.0
 
+[battery]
+low_v = 7.0          # 2S Li-ion: warn below this
+critical_v = 6.6     # sit down and refuse motion below this
+hold_s = 20.0        # a level must hold this long before it changes
+# channel = "A4"     # robot_hat ADC channel of the voltage divider
+
 [limits]
 steps_max = 10
 actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wave"]
@@ -809,8 +829,9 @@ actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wa
   - **No booting from the NVMe** behind the switch: the system stays on the
     SD card. The `storage` Ansible role moves everything that writes or is
     large to the NVMe: `/opt/picrawler` (code, venv, whisper.cpp, Piper),
-    `/var/lib/picrawler` (models, calibration, agent cache),
-    `/var/lib/picrawler-web` (log database), the journal, Mosquitto data,
+    `/var/lib/picrawler` (models, calibration, agent cache, and the web
+    object log in `/var/lib/picrawler/web/log.db`),
+    `/var/lib/picrawler-web` (home of the web user), the journal, Mosquitto data,
     the apt cache and the swap file; `/tmp` goes to RAM. The SD card keeps
     `/`, `/boot`, `/etc`, `/usr`. Robot units have `RequiresMountsFor`, so
     without the NVMe they do not start instead of writing to the SD card.

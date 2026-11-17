@@ -12,8 +12,9 @@ key = "{{ picrawler_config_dir }}/web-tls/key.pem"
 {% endif %}
 
 [log]
-path = "{{ picrawler_web_state_dir }}/log.db"
+path = "{{ picrawler_web_log_path }}"
 retention_days = {{ picrawler_web_log_retention_days }}
+max_entries = {{ picrawler_web_log_max_entries }}
 min_score = 0.5
 start_frames = 3
 end_after_s = 2.0

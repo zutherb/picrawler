@@ -152,6 +152,25 @@
     - "{{ picrawler_vision_labels_url }}"
   when: picrawler_vision_download_models | bool
 
+# The web object log lives in {{ picrawler_state_dir }}/web (code default of
+# [log] path in services/web), owned by the web user. The web user is in the
+# picrawler group and only needs to traverse the state directory.
+- name: Let the web user traverse the state directory
+  ansible.builtin.file:
+    path: "{{ picrawler_state_dir }}"
+    state: directory
+    owner: "{{ picrawler_user }}"
+    group: "{{ picrawler_user }}"
+    mode: "0751"
+
+- name: Create web UI data directory (object log)
+  ansible.builtin.file:
+    path: "{{ picrawler_web_log_path | dirname }}"
+    state: directory
+    owner: "{{ picrawler_web_user }}"
+    group: "{{ picrawler_web_user }}"
+    mode: "0750"
+
 - name: Create web TLS directory
   ansible.builtin.file:
     path: "{{ picrawler_config_dir }}/web-tls"
