@@ -1,6 +1,6 @@
 # Target architecture: sensor-driven body over MQTT
 
-Status: draft · As of: 2026-11-12 · Branch: `motion-framework`
+Status: draft · As of: 2026-11-12 · Branch: `master`
 
 ## 1. Goal
 
@@ -105,6 +105,8 @@ services/             # one process per service: python -m services.<name> --con
     store.py          # SQLite
     bluetooth.py      # bluetoothctl
     system.py         # units/journal/power via systemctl + polkit, system info
+    hardware.py       # hardware check for the admin page
+    demo.py           # --fake --demo: replays a recording from rl_coral/demo_kitchen.py
     static/           # HTML, CSS, JS, without CDN or inline scripts (CSP)
   sensor_speech/      # audio.py (mic + VAD), asr.py (whisper-server client)
   agent/              # agent.py, brains.py (remote, LiteRT-LM, keywords), tools.py, world.py
@@ -112,7 +114,11 @@ services/             # one process per service: python -m services.<name> --con
   display/            # sysinfo.py, render.py (128x64 1-bit), splash.py, assets/
 apps/
   ios/                # SwiftUI app, XcodeGen project.yml
+rl_coral/             # sim-to-real RL gait on the Coral, 2D occupancy mapper (bypasses MQTT, see rl_coral/README.md)
+spikes/coral/         # spike M-V0: Coral environment check and benchmark
 deploy/ansible/       # roles: base, network, mosquitto, storage, picrawler
+examples/             # motion-only demos (need the real robot)
+docs/                 # this document, logo
 tests/
 ```
 
@@ -505,7 +511,7 @@ stream generation and detection keep running, and vice versa.
 ```
 Browser ──HTTP──► web-service :8080 ─┬─ /stream.mjpg ──► vision-service 127.0.0.1:8081 (Proxy)
    ▲                                 ├─ MQTT (user ui): sensor/#, state/#, status, event/#
-   └──── Server-Sent Events ─────────┤                cmd/stop, cmd/action, vision/mode
+   └──── Server-Sent Events ─────────┤                cmd/stop, remote/state, map/scan, vision/mode
                                      └─ bluetoothctl   ──► Bluetooth controller
 ```
 
@@ -610,8 +616,9 @@ another machine that scrapes it.
     `picrawler-*` units as well as shutdown/reboot of the system.
     No `sudo`, no shell commands with input from the browser.
   - MQTT user `ui`: reads everything under the robot's prefix (for the MQTT
-    debug page), writes only `cmd/action`, `cmd/stop`, `cmd/heartbeat`,
-    `vision/mode`, `agent/ask` and its own status.
+    debug page), writes only `cmd/stop`, `remote/state`, `map/scan`,
+    `vision/mode`, `agent/ask` and its own status (`web/status`); see
+    `services/common/topics.py`.
 - Failed logins are rate-limited (e.g. 5 attempts per minute
   per IP).
 
@@ -740,7 +747,7 @@ robot_id = "1"
 host = "localhost"
 port = 1883
 username = "body"
-password_file = "/etc/picrawler/mqtt.pass"
+password_file = "/etc/picrawler/mqtt/body.pass"
 tls = false
 
 [executor]
@@ -840,7 +847,7 @@ actions = ["stand", "sit", "forward", "backward", "turn left", "turn right", "wa
   flashing filled/outlined = critical; the temperature is inverted from the
   warning level and flashes when critical.
 - **Boot and shutdown splash**: the robot from the project artwork
-  (1 bit, white shell lit, blue parts dithered, 50 px high, centered) with
+  (1 bit, white shell lit, amber parts dithered, 50 px high, centered) with
   a blinking state icon below it, ↻ while booting and ⏻ while shutting
   down. A standard-library-only script on the SD card
   (`/usr/local/lib/picrawler/oled-splash.py`) writes pre-rendered frames

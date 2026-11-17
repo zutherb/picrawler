@@ -37,6 +37,7 @@ deploy/ansible/   # Pi provisioning; unit names/configs must match services/
 tests/            # unittest; tests/fake_robot_hat.py stands in for the hardware; aiohttp/numpy tests skip if missing
 examples/         # motion demos, must run on the robot with sudo
 rl_coral/         # sim-to-real RL gait: PyBullet env, PPO -> int8 TFLite, 50 Hz loop on the Coral; bypasses MQTT
+spikes/coral/     # Coral TPU environment check + benchmark (spike M-V0)
 ```
 
 - **Servo-order pitfall:** `coord2polar()` returns `[alpha, beta, gamma]` (femur, knee, hip) but each leg's servos are wired `[beta, alpha, gamma]`. `polar2coord()`, `limit_angle()` and `set_angle()` take servo order. Use `leg_servo_angles()`.

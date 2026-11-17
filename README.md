@@ -20,6 +20,9 @@ picrawler/
 services/         # MQTT microservices: body, arbiter, sensors, vision, web UI (see services/README.md)
 deploy/ansible/   # provisions the Pi: Mosquitto, venv, systemd units
 apps/ios/         # iPhone/iPad remote control (SwiftUI), finds the robot via Bonjour or its hotspot
+rl_coral/         # sim-to-real RL gait on the Coral Edge TPU, 2D mapper (see rl_coral/README.md)
+spikes/coral/     # Coral TPU environment check and benchmark
+docs/             # target architecture, logo
 tests/            # run off-hardware with a fake robot_hat
 examples/         # motion-only demos (need the real robot)
 ```
