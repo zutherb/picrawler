@@ -9,6 +9,10 @@
   --accent-1: #FFB020;
   --accent-2: #FFC555;
   --accent-gradient: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  /* Amber as TEXT colour. #FFB020 on the light background is only ~1.7:1, so
+     light mode uses a darker amber (5.1:1 on --bg, 5.4:1 on --panel, WCAG AA).
+     Fills, borders, buttons and focus rings keep --accent-1. */
+  --accent-text: #9A5B00;
   --font-head: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, Consolas, monospace;
   --radius: 14px;
@@ -44,6 +48,7 @@
     --ok: #3DD68C;
     --warn: #FF8A3D;
     --bad: #FF5F57;
+    --accent-text: var(--accent-1);
   }
 }
 :root[data-theme="dark"] {
@@ -60,6 +65,7 @@
   --ok: #3DD68C;
   --warn: #FF8A3D;
   --bad: #FF5F57;
+  --accent-text: var(--accent-1);
 }
 
 * { box-sizing: border-box; }
@@ -70,7 +76,7 @@ body {
   font: 15px/1.55 var(--font-head);
 }
 a { color: inherit; text-decoration: none; }
-a:hover { color: var(--accent-1); }
+a:hover { color: var(--accent-text); }
 code { font-family: var(--font-mono); font-size: 0.85em; }
 ::selection { background: rgba(255, 176, 32, 0.35); }
 
@@ -137,7 +143,7 @@ main.wide { max-width: none; }
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--accent-1);
+  color: var(--accent-text);
 }
 .muted { color: var(--muted); }
 .hidden { display: none !important; }
@@ -332,7 +338,7 @@ body.login-page::after {
 .messages { list-style: none; margin: 0; padding: 0; }
 .messages li { padding: 10px 0; border-bottom: 1px solid var(--border); }
 .messages .topic { cursor: pointer; font-family: var(--font-mono); font-size: 0.85rem; }
-.messages .topic:hover { color: var(--accent-1); }
+.messages .topic:hover { color: var(--accent-text); }
 pre.payload {
   margin: 6px 0 0; padding: 10px 12px; border-radius: 8px; font-family: var(--font-mono); font-size: 0.76rem; line-height: 1.6;
   max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word;
@@ -350,7 +356,7 @@ pre.payload.compact { max-height: none; }
 .recent { cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
 .recent:hover, .recent:focus-visible { border-color: rgba(255, 176, 32, 0.45); box-shadow: var(--shadow); outline: none; }
 .recent .more { margin-left: auto; font-family: var(--font-mono); font-size: 0.75rem; }
-.recent:hover .more { color: var(--accent-1); }
+.recent:hover .more { color: var(--accent-text); }
 .feed.compact { max-height: none; overflow: hidden; }
 .feed.compact li { padding: 6px 0; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .log-dialog {
