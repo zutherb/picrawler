@@ -20,56 +20,56 @@
   </defs>
 
   <!-- ground shadow -->
-  <ellipse cx="100" cy="189" rx="46" ry="5" fill="#000" opacity="0.18"/>
+  <ellipse cx="100" cy="189" rx="50" ry="5" fill="#000" opacity="0.18"/>
 
-  <!-- back legs -->
+  <!-- back legs (behind the ball) -->
   <g stroke-linecap="round">
-    <path d="M90 152 L84 182" stroke="#D3CEC4" stroke-width="9"/>
-    <path d="M110 152 L116 182" stroke="#D3CEC4" stroke-width="9"/>
-    <path d="M84 180 L83 186" stroke="#1A1C22" stroke-width="5"/>
-    <path d="M116 180 L117 186" stroke="#1A1C22" stroke-width="5"/>
+    <path d="M86 140 L82 180" stroke="#D3CEC4" stroke-width="12"/>
+    <path d="M114 140 L118 180" stroke="#D3CEC4" stroke-width="12"/>
+    <path d="M82 180 L81.6 184" stroke="#1A1C22" stroke-width="7"/>
+    <path d="M118 180 L118.4 184" stroke="#1A1C22" stroke-width="7"/>
   </g>
 
-  <!-- body -->
-  <ellipse cx="100" cy="148" rx="31" ry="29" fill="url(#shell)" stroke="#CBC5B9" stroke-width="1.2"/>
-  <ellipse cx="72" cy="132" rx="7" ry="5" fill="#2A2D36" transform="rotate(-30 72 132)"/>
-  <ellipse cx="128" cy="132" rx="7" ry="5" fill="#2A2D36" transform="rotate(30 128 132)"/>
-  <circle cx="100" cy="140" r="8" fill="url(#ear)"/>
-  <circle cx="100" cy="140" r="5.5" fill="#0D0F14"/>
-  <circle cx="98" cy="138" r="1.6" fill="#FFFFFF" opacity="0.8"/>
+  <!-- ball: head and body in one -->
+  <ellipse cx="100" cy="90" rx="66" ry="62" fill="url(#shell)" stroke="#CBC5B9" stroke-width="1.2"/>
 
   <!-- front legs -->
   <g stroke-linecap="round">
-    <path d="M76 150 L58 184" stroke="url(#shell)" stroke-width="11"/>
-    <path d="M124 150 L142 184" stroke="url(#shell)" stroke-width="11"/>
-    <path d="M59 182 L56 189" stroke="#1A1C22" stroke-width="6"/>
-    <path d="M141 182 L144 189" stroke="#1A1C22" stroke-width="6"/>
+    <path d="M70 138 L60 182" stroke="#CBC5B9" stroke-width="16.4"/>
+    <path d="M130 138 L140 182" stroke="#CBC5B9" stroke-width="16.4"/>
+    <path d="M70 138 L60 182" stroke="url(#shell)" stroke-width="14"/>
+    <path d="M130 138 L140 182" stroke="url(#shell)" stroke-width="14"/>
+    <path d="M60.5 181 L59 187" stroke="#1A1C22" stroke-width="8"/>
+    <path d="M139.5 181 L141 187" stroke="#1A1C22" stroke-width="8"/>
   </g>
-  <circle cx="76" cy="150" r="7" fill="url(#ear)"/>
-  <circle cx="124" cy="150" r="7" fill="url(#ear)"/>
+  <!-- leg joints: amber ring, dark hub -->
+  <circle cx="70" cy="138" r="8" fill="url(#ear)"/>
+  <circle cx="130" cy="138" r="8" fill="url(#ear)"/>
+  <circle cx="70" cy="138" r="3.6" fill="#2A2D36"/>
+  <circle cx="130" cy="138" r="3.6" fill="#2A2D36"/>
 
-  <!-- antenna -->
-  <path d="M126 44 L136 24" stroke="#CBC5B9" stroke-width="6" stroke-linecap="round"/>
-  <path d="M126 44 L136 24" stroke="#FAF8F3" stroke-width="3.6" stroke-linecap="round"/>
-  <circle cx="138" cy="20" r="7.5" fill="#FFFFFF" stroke="#CBC5B9" stroke-width="1.2"/>
+  <!-- side camera lenses -->
+  <ellipse cx="36" cy="92" rx="7" ry="14" fill="url(#ear)"/>
+  <ellipse cx="164" cy="92" rx="7" ry="14" fill="url(#ear)"/>
+  <ellipse cx="35.5" cy="92" rx="4.2" ry="9.5" fill="#2A2D36"/>
+  <ellipse cx="164.5" cy="92" rx="4.2" ry="9.5" fill="#2A2D36"/>
 
-  <!-- ears -->
-  <rect x="35" y="64" width="20" height="40" rx="10" fill="url(#ear)"/>
-  <rect x="145" y="64" width="20" height="40" rx="10" fill="url(#ear)"/>
+  <!-- camera ring on top -->
+  <ellipse cx="100" cy="30" rx="13" ry="5.6" fill="url(#ear)"/>
+  <ellipse cx="100" cy="29.6" rx="8" ry="3.4" fill="#0D0F14"/>
+  <ellipse cx="97.6" cy="28.6" rx="2" ry="0.9" fill="#FFFFFF" opacity="0.8"/>
 
-  <!-- head -->
-  <rect x="44" y="36" width="112" height="90" rx="42" fill="url(#shell)" stroke="#CBC5B9" stroke-width="1.2"/>
-
-  <!-- visor with eyes -->
-  <rect x="58" y="54" width="84" height="54" rx="22" fill="url(#visor)"/>
+  <!-- screen face with comic eyes and smile -->
+  <rect x="54" y="56" width="92" height="68" rx="28" fill="url(#visor)"/>
   <g filter="url(#glow)">
-    <circle cx="83" cy="79" r="10.5" fill="#FFFFFF"/>
-    <circle cx="117" cy="79" r="10.5" fill="#FFFFFF"/>
-    <circle cx="83" cy="79" r="6.2" fill="#0D0F14"/>
-    <circle cx="117" cy="79" r="6.2" fill="#0D0F14"/>
-    <circle cx="80.8" cy="76.6" r="1.9" fill="#FFFFFF" opacity="0.9"/>
-    <circle cx="114.8" cy="76.6" r="1.9" fill="#FFFFFF" opacity="0.9"/>
+    <circle cx="81" cy="85" r="13" fill="#FFFFFF"/>
+    <circle cx="119" cy="85" r="13" fill="#FFFFFF"/>
+    <circle cx="81" cy="85" r="7.6" fill="#0D0F14"/>
+    <circle cx="119" cy="85" r="7.6" fill="#0D0F14"/>
+    <circle cx="78.4" cy="82.1" r="2.3" fill="#FFFFFF" opacity="0.9"/>
+    <circle cx="116.4" cy="82.1" r="2.3" fill="#FFFFFF" opacity="0.9"/>
   </g>
-  <ellipse cx="72" cy="94" rx="5" ry="3.2" fill="#FF8C8C" opacity="0.9"/>
-  <ellipse cx="128" cy="94" rx="5" ry="3.2" fill="#FF8C8C" opacity="0.9"/>
+  <path d="M92 106 Q100 113 108 106" fill="none" stroke="#FFB020" stroke-width="3.2" stroke-linecap="round"/>
+  <ellipse cx="67" cy="106" rx="5" ry="3.2" fill="#FF8C8C" opacity="0.9"/>
+  <ellipse cx="133" cy="106" rx="5" ry="3.2" fill="#FF8C8C" opacity="0.9"/>
 </svg>

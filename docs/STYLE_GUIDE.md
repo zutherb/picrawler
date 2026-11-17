@@ -14,9 +14,29 @@ and missed the others; the hollow-ring-eye bug took three commits
 
 ## 1. Mascot rules
 
-The mascot is a white, round robot head with a near-black visor, amber ears,
-pink cheeks and an antenna with a ball. Full figure: `logo.svg`; head on a dark
-tile: `logo-mark.svg`.
+The mascot is the robot from the PiCrawler tile on bernd-zuther.de
+(`assets/picrawler/pc-szene-{1,2,3}.webp`, 3D renders): a white **ball** (head
+and body in one) standing on **four short cylindrical legs**, with a big
+near-black screen face, comic eyes, a small amber smile and pink cheeks. Full
+figure: `logo.svg`; the same figure, compacted, on a dark tile: `logo-mark.svg`.
+
+### 1.0 Shape (since the ball redesign)
+
+| Part | Shape | `logo.svg` (200 grid) | `logo-mark.svg` (64 grid) |
+|---|---|---|---|
+| Ball | one ellipse, slightly wider than tall; no separate head/body, no neck | centre (100, 90), rx 66, ry 62 | centre (32, 29), rx 22, ry 20.5 |
+| Screen face | rounded rect, ~70 % of the ball width, upper middle | x 54–146, y 56–124, rx 28 | x 17–47, y 17.5–41.5, rx 9.5 |
+| Camera ring | flat amber ellipse with a dark lens on top of the ball (replaces the old antenna) | (100, 30), rx 13 / 5.6, lens 8 / 3.4 | (32, 9.2), rx 5 / 2.2, lens 3 / 1.3 |
+| Side lenses | upright amber ellipses with a dark lens, sitting on the ball outline left and right (replace the old rectangular ears) | (36 / 164, 92), rx 7, ry 14 | (10.5 / 53.5, 30), rx 2.6, ry 5.2 (amber only) |
+| Legs | 4 straight capsules (round caps); 2 front legs splayed outwards in the shell colour, 2 back legs in between in `#D3CEC4`, drawn behind the ball | front 70→60 / 130→140 (y 138→182, width 14 + `#CBC5B9` outline), back 86→82 / 114→118 (y 140→180, width 12) | front 21.5→18 / 42.5→46 (y 45→56.5, width 5.2), back 27→25.5 / 37→38.5 (y 46→55, width 4.4) |
+| Joints | amber disc at the top of each front leg, dark hub `#2A2D36` | r 8, hub r 3.6 | r 2.7 (no hub) |
+| Feet | short dark tips `#1A1C22` | width 8 / 7 | none (invisible on the dark tile) |
+| Smile | amber `#FFB020` quadratic curve under the eyes, round caps | `M92 106 Q100 113 108 106`, width 3.2 | `M29.2 35.8 Q32 38.4 34.8 35.8`, width 1.4 |
+| Cheeks | pink ellipses at the lower screen corners | (67 / 133, 106), rx 5, ry 3.2 | (20.6 / 43.4, 36.6), rx 2, ry 1.25 |
+
+**Gone for good:** rectangular head, rectangular side ears, antenna with a
+ball, separate small body with a belly lens. Don't bring them back in one
+file only; the shape is the same in every format (SVG, PNG, Swift).
 
 ### 1.1 Eyes: always comic eyes, never rings
 
@@ -38,25 +58,25 @@ Reference geometry (copy it, don't re-invent it):
 
 | File | Eye centres | R (eye) | Pupil r | Highlight r / offset |
 |---|---|---|---|---|
-| `services/web/static/logo.svg` (= `docs/logo.svg`) | (83, 79), (117, 79) | 10.5 | 6.2 (59 %) | 1.9 at (−2.2, −2.4) |
-| `services/web/static/logo-mark.svg` | (26, 32.5), (38, 32.5) | 4.6 | 2.7 (59 %) | 0.85 at (−1, −1.2) |
-| `apps/ios/.../ConnectView.swift` `RobotMark` (64-unit grid, diameters) | x ±6, y +0.5 from centre | 9.2 ⌀ | 5.4 ⌀ (59 %) | 1.7 ⌀ at (−1, −1.2) |
+| `services/web/static/logo.svg` (= `docs/logo.svg`) | (81, 85), (119, 85) | 13 | 7.6 (58 %) | 2.3 at (−2.6, −2.9) |
+| `services/web/static/logo-mark.svg` | (25.5, 28), (38.5, 28) | 5 | 2.9 (58 %) | 0.9 at (−1, −1.2) |
+| `apps/ios/.../ConnectView.swift` `RobotMark` (64-unit grid, diameters) | x ±6.5, y −4 from centre | 10 ⌀ | 5.8 ⌀ (58 %) | 1.8 ⌀ at (−1, −1.2) |
 
 ```svg
 <!-- logo.svg: correct -->
-<circle cx="83" cy="79" r="10.5" fill="#FFFFFF"/>
-<circle cx="83" cy="79" r="6.2" fill="#0D0F14"/>
-<circle cx="80.8" cy="76.6" r="1.9" fill="#FFFFFF" opacity="0.9"/>
+<circle cx="81" cy="85" r="13" fill="#FFFFFF"/>
+<circle cx="81" cy="85" r="7.6" fill="#0D0F14"/>
+<circle cx="78.4" cy="82.1" r="2.3" fill="#FFFFFF" opacity="0.9"/>
 
 <!-- WRONG: hollow ring -->
-<circle cx="83" cy="79" r="10.5" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="81" cy="85" r="13" fill="none" stroke="#FFFFFF" stroke-width="3"/>
 ```
 
 ```swift
 // ConnectView.swift RobotMark: correct (s = size / 64)
-Circle().fill(.white).frame(width: 9.2 * s).offset(x: x * s, y: 0.5 * s)
-Circle().fill(Theme.background).frame(width: 5.4 * s).offset(x: x * s, y: 0.5 * s)
-Circle().fill(.white.opacity(0.9)).frame(width: 1.7 * s).offset(x: (x - 1) * s, y: -0.7 * s)
+Circle().fill(.white).frame(width: 10 * s).offset(x: x * s, y: -4 * s)
+Circle().fill(Theme.background).frame(width: 5.8 * s).offset(x: x * s, y: -4 * s)
+Circle().fill(.white.opacity(0.9)).frame(width: 1.8 * s).offset(x: (x - 1) * s, y: -5.2 * s)
 ```
 
 Pupil and eye share the same centre (no "looking sideways" offsets), so the
@@ -66,12 +86,12 @@ mark stays symmetric at 16 px favicon size.
 
 | Part | Colour |
 |---|---|
-| Shell (head, body, front legs) | gradient `#FFFFFF` → `#F4F1EA` (→ `#E2DDD2` in `logo.svg`), stroke `#CBC5B9` 1.2 |
+| Shell (ball, front legs) | gradient `#FFFFFF` → `#F4F1EA` (→ `#E2DDD2` in `logo.svg`), stroke `#CBC5B9` 1.2 |
 | Visor | `#0D0F14` (mark), gradient `#1C1F28` → `#0D0F14` (`logo.svg`) |
-| Ears, joints, body "lens" ring | amber gradient `#FFC555` → `#E89A0C` (`id="ear"`) |
+| Camera ring, side lenses, leg joints | amber gradient `#FFC555` → `#E89A0C` (`id="ear"`, name kept from the old ears); lenses inside `#0D0F14` (top) / `#2A2D36` (sides) |
+| Smile | `#FFB020` stroke |
 | Cheeks | `#FF8C8C` ellipses below the eyes, opacity 0.9 |
-| Back legs / feet / side joints | `#D3CEC4` / `#1A1C22` / `#2A2D36` |
-| Antenna | shell colours, ball top right |
+| Back legs / feet / joint hubs | `#D3CEC4` / `#1A1C22` / `#2A2D36` |
 | Tile of the mark | gradient `#232631` → `#0D0F14`, rx 15 of 64, thin amber edge `#FFB020` at 45 % opacity |
 | Eye glow (`logo.svg` only) | `filter="url(#glow)"` Gaussian blur 2.2 on the eye group |
 
@@ -192,7 +212,7 @@ contrast("#9A5B00", "#FAF8F3")   # 5.11
 |---|---|---|
 | `services/web/static/logo.svg` | full mascot (login page art) — **master of the figure** | SVG |
 | `docs/logo.svg` | README logo, identical copy of the file above | SVG |
-| `services/web/static/logo-mark.svg` | head on a dark tile (header, favicon of every page) — **master of the mark** | SVG |
+| `services/web/static/logo-mark.svg` | compact ball robot on a dark tile (header, favicon of every page) — **master of the mark** | SVG |
 | `services/web/static/app.css` | all web colours as CSS variables (light, dark, `prefers-color-scheme`) | CSS |
 | `services/web/static/app.js` | `BOX_COLORS` | JS |
 | `services/web/static/remote.js` | map canvas colours (hard-coded `rgba(...)`) | JS |
@@ -200,7 +220,7 @@ contrast("#9A5B00", "#FAF8F3")   # 5.11
 | `services/display/assets/robot.png` | raster mascot artwork (240×320, dark background) for the OLED splash | PNG |
 | `services/display/splash.py` | `BACKGROUND = (20, 22, 29)` key colour (#14161D), pink-cheek/amber thresholds for 1-bit dithering | Python |
 | `apps/ios/PiCrawler/App/Theme.swift` | all iOS colours | Swift |
-| `apps/ios/PiCrawler/Views/ConnectView.swift` | `RobotMark`: the mark drawn natively (tile, ears, head, visor, comic eyes, antenna) | Swift |
+| `apps/ios/PiCrawler/Views/ConnectView.swift` | `RobotMark`: the mark drawn natively (tile, legs, ball, joints, side lenses, camera ring, screen, comic eyes, cheeks, smile), same geometry as `logo-mark.svg` | Swift |
 | `apps/ios/PiCrawler/Views/{MapView,RemoteView,JoystickView}.swift` | use `Theme.*`, `MapView` has `0x3A3E4A` | Swift |
 | `apps/ios/PiCrawler/Assets.xcassets/AppIcon.appiconset/icon-1024.png` | app icon, rendered from `logo-mark.svg` | PNG |
 | `apps/ios/PiCrawler/Assets.xcassets/LaunchBackground.colorset/Contents.json` | launch colour `0x14 0x16 0x1D` | JSON |
@@ -228,7 +248,7 @@ the SVGs unless you update them in the same commit**:
 | PNG | Source | How |
 |---|---|---|
 | `icon-1024.png` | `logo-mark.svg` | full-bleed: remove `rx="15"` from the tile rect and drop the amber edge rect (iOS applies its own corner mask), render 1024×1024 |
-| `robot.png` | none (raster artwork) | edit pixels directly (ff1bfb9 recoloured it pixel-wise); keep 240×320 and the `#14161D` background, check the eyes, then run the splash tests |
+| `robot.png` | `logo.svg` | remove the ground-shadow ellipse, set `viewBox="22 -6 156 208"` (portrait crop), render 240×320 on `#14161D` (`<body style="background:#14161D">`); then check the eyes and run the splash tests |
 
 Render recipe (browser over CDP; reproduces the committed `icon-1024.png`
 pixel-identically). With the agent's browser helpers:

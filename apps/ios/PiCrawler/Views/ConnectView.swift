@@ -125,7 +125,9 @@ struct RobotList: View {
     }
 }
 
-/// The compact logo (head on a dark tile), drawn natively.
+/// The compact logo (ball robot with four legs on a dark tile), drawn
+/// natively; same geometry as logo-mark.svg (64-unit grid, offsets from the
+/// centre 32/32).
 struct RobotMark: View {
     var body: some View {
         GeometryReader { geo in
@@ -133,19 +135,38 @@ struct RobotMark: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 15 * s)
                     .fill(LinearGradient(colors: [Color(hex: 0x232631), Theme.deep2], startPoint: .topLeading, endPoint: .bottomTrailing))
-                Group {
-                    Capsule().fill(Theme.accent).frame(width: 9 * s, height: 19 * s).offset(x: -20.5 * s, y: 2.5 * s)
-                    Capsule().fill(Theme.accent).frame(width: 9 * s, height: 19 * s).offset(x: 20.5 * s, y: 2.5 * s)
-                    RoundedRectangle(cornerRadius: 17 * s).fill(Color(hex: 0xFAF8F3)).frame(width: 40 * s, height: 42 * s).offset(y: 2 * s)
-                    RoundedRectangle(cornerRadius: 9.5 * s).fill(Color(hex: 0x0D0F14)).frame(width: 30 * s, height: 24 * s).offset(y: 1 * s)
-                    // comic eyes like logo-mark.svg: white eye, dark pupil, highlight
-                    ForEach([-6.0, 6.0], id: \.self) { x in
-                        Circle().fill(.white).frame(width: 9.2 * s).offset(x: x * s, y: 0.5 * s)
-                        Circle().fill(Theme.background).frame(width: 5.4 * s).offset(x: x * s, y: 0.5 * s)
-                        Circle().fill(.white.opacity(0.9)).frame(width: 1.7 * s).offset(x: (x - 1) * s, y: -0.7 * s)
-                    }
-                    Circle().fill(.white).frame(width: 6.8 * s).offset(x: 14 * s, y: -25.5 * s)
+                // back legs behind the ball, ball, front legs with amber joints
+                ForEach([-1.0, 1.0], id: \.self) { side in
+                    Capsule().fill(Color(hex: 0xD3CEC4)).frame(width: 4.4 * s, height: 13.5 * s)
+                        .rotationEffect(.degrees(-9.5 * side)).offset(x: 5.75 * side * s, y: 18.5 * s)
                 }
+                Ellipse().fill(Color(hex: 0xFAF8F3)).frame(width: 44 * s, height: 41 * s).offset(y: -3 * s)
+                ForEach([-1.0, 1.0], id: \.self) { side in
+                    Capsule().fill(.white).frame(width: 5.2 * s, height: 17.2 * s)
+                        .rotationEffect(.degrees(-17 * side)).offset(x: 12.25 * side * s, y: 18.75 * s)
+                    Circle().fill(Theme.accent).frame(width: 5.4 * s).offset(x: 10.5 * side * s, y: 13 * s)
+                    // side camera lenses
+                    Ellipse().fill(Theme.accent).frame(width: 5.2 * s, height: 10.4 * s).offset(x: 21.5 * side * s, y: -2 * s)
+                }
+                // camera ring on top
+                Ellipse().fill(Theme.accent).frame(width: 10 * s, height: 4.4 * s).offset(y: -22.8 * s)
+                Ellipse().fill(Theme.background).frame(width: 6 * s, height: 2.6 * s).offset(y: -23 * s)
+                // screen face
+                RoundedRectangle(cornerRadius: 9.5 * s).fill(Color(hex: 0x0D0F14)).frame(width: 30 * s, height: 24 * s).offset(y: -2.5 * s)
+                // comic eyes like logo-mark.svg: white eye, dark pupil, highlight
+                ForEach([-6.5, 6.5], id: \.self) { x in
+                    Circle().fill(.white).frame(width: 10 * s).offset(x: x * s, y: -4 * s)
+                    Circle().fill(Theme.background).frame(width: 5.8 * s).offset(x: x * s, y: -4 * s)
+                    Circle().fill(.white.opacity(0.9)).frame(width: 1.8 * s).offset(x: (x - 1) * s, y: -5.2 * s)
+                    Ellipse().fill(Color(hex: 0xFF8C8C)).frame(width: 4 * s, height: 2.5 * s).offset(x: x * 1.754 * s, y: 4.6 * s)
+                }
+                // smile
+                Path { p in
+                    p.move(to: CGPoint(x: 29.2 * s, y: 35.8 * s))
+                    p.addQuadCurve(to: CGPoint(x: 34.8 * s, y: 35.8 * s), control: CGPoint(x: 32 * s, y: 38.4 * s))
+                }
+                .stroke(Theme.accent, style: StrokeStyle(lineWidth: 1.4 * s, lineCap: .round))
+                .frame(width: 64 * s, height: 64 * s)
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }

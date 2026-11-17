@@ -22,7 +22,7 @@ BACKGROUND = (20, 22, 29)       # #14161D, dark background of the artwork
 def robot_bitmap(height=62):
     """The robot from the project artwork as a 1-bit picture.
 
-    White shell fully lit, amber parts (ears, joints) dithered, background,
+    White shell fully lit, amber parts (joints, lenses, smile) dithered, background,
     visor and the pink cheeks dark, so the comic eyes (white eye, dark
     pupil, highlight) stay clean.
     """
